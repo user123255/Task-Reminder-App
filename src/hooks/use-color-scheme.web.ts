@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+
 import { useColorScheme as useRNColorScheme } from 'react-native';
 
 /**
- * To support static rendering, this value needs to be re-calculated on the client side for web
+ * On web, react-native-web's useColorScheme can return
+ * `null` before hydration. This hook defers the value
+ * until after mount to avoid a hydration mismatch.
  */
 export function useColorScheme() {
   const [hasHydrated, setHasHydrated] = useState(false);
@@ -11,11 +14,11 @@ export function useColorScheme() {
     setHasHydrated(true);
   }, []);
 
-  const colorScheme = useRNColorScheme();
+  const scheme = useRNColorScheme();
 
   if (hasHydrated) {
-    return colorScheme;
+    return scheme;
   }
 
-  return 'light';
+  return 'light' as const;
 }

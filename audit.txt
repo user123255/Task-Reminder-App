@@ -1,0 +1,6909 @@
+
+=============================
+FILE: AGENTS.md
+=============================
+# Expo HAS CHANGED
+
+Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+
+
+=============================
+FILE: CLAUDE.md
+=============================
+@AGENTS.md
+
+
+=============================
+FILE: package.json
+=============================
+{
+  "name": "task-reminder-app",
+  "main": "expo-router/entry",
+  "version": "1.0.0",
+  "dependencies": {
+    "@expo/ui": "~57.0.15",
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.112.4",
+    "expo": "~57.0.19",
+    "expo-constants": "~57.0.16",
+    "expo-device": "~57.0.1",
+    "expo-font": "~57.0.2",
+    "expo-glass-effect": "~57.0.1",
+    "expo-image": "~57.0.4",
+    "expo-linking": "~57.0.9",
+    "expo-notifications": "~57.0.17",
+    "expo-router": "~57.0.18",
+    "expo-splash-screen": "~57.0.8",
+    "expo-sqlite": "~57.0.2",
+    "expo-status-bar": "~57.0.1",
+    "expo-symbols": "~57.0.2",
+    "expo-system-ui": "~57.0.3",
+    "expo-web-browser": "~57.0.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-url-polyfill": "^4.0.0",
+    "react-native-web": "~0.21.0",
+    "react-native-worklets": "0.10.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "reset-project": "node ./scripts/reset-project.js",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "expo lint"
+  },
+  "private": true
+}
+
+
+=============================
+FILE: app.json
+=============================
+{
+  "expo": {
+    "name": "Task-Reminder-App",
+    "slug": "Task-Reminder-App",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "taskreminderapp",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/expo.icon"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#208AEF",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-sqlite",
+      "expo-image",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
+
+
+=============================
+FILE: tsconfig.json
+=============================
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@/assets/*": [
+        "./assets/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}
+
+
+=============================
+FILE: .env
+=============================
+EXPO_PUBLIC_SUPABASE_URL=https://cojkudbzzfpvlgnbsjzr.supabase.co
+EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_CXUhzliKbE2SDfqDmDNfuQ_YwG27NoB
+
+=============================
+FILE: src/app/_layout.tsx
+=============================
+import {
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider,
+  router,
+  usePathname,
+} from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import {
+  ActivityIndicator,
+  View,
+  useColorScheme,
+} from 'react-native';
+import { useEffect } from 'react';
+
+import {
+  AuthProvider,
+  useAuth,
+} from '@/hooks/use-auth';
+
+function RootNavigator() {
+  const colorScheme = useColorScheme();
+  const { session, loading } = useAuth();
+  const pathname = usePathname();
+
+  const isAuthScreen =
+    pathname === '/login' ||
+    pathname === '/signup';
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (!session && !isAuthScreen) {
+      router.replace('/login');
+      return;
+    }
+
+    if (session && isAuthScreen) {
+      router.replace('/');
+    }
+  }, [session, loading, isAuthScreen]);
+
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#F6F8FC',
+        }}
+      >
+        <ActivityIndicator
+          size="large"
+          color="#208AEF"
+        />
+
+        <View
+          style={{
+            marginTop: 12,
+          }}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <ThemeProvider
+      value={
+        colorScheme === 'dark'
+          ? DarkTheme
+          : DefaultTheme
+      }
+    >
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="signup" />
+        <Stack.Screen name="add-activity" />
+        <Stack.Screen name="explore" />
+      </Stack>
+
+      <StatusBar
+        style={
+          colorScheme === 'dark'
+            ? 'light'
+            : 'dark'
+        }
+      />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
+}
+
+=============================
+FILE: src/app/index.tsx
+=============================
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  Activity,
+  fetchActivities,
+  getActivityCountdown,
+  getActivityStatus,
+  updateActivityCompletion,
+} from '@/services/activities';
+
+const LIFE_AREAS = [
+  {
+    name: 'Spiritual',
+    icon: 'heart-outline' as const,
+  },
+  {
+    name: 'Health',
+    icon: 'fitness-outline' as const,
+  },
+  {
+    name: 'Business',
+    icon: 'wallet-outline' as const,
+  },
+  {
+    name: 'Career',
+    icon: 'briefcase-outline' as const,
+  },
+  {
+    name: 'Relationships',
+    icon: 'people-outline' as const,
+  },
+  {
+    name: 'Learning',
+    icon: 'school-outline' as const,
+  },
+];
+
+const AREA_ICONS: Record<
+  string,
+  keyof typeof Ionicons.glyphMap
+> = {
+  Spiritual: 'heart-outline',
+  Health: 'fitness-outline',
+  Business: 'wallet-outline',
+  Career: 'briefcase-outline',
+  Relationships: 'people-outline',
+  Learning: 'school-outline',
+  Personal: 'person-outline',
+};
+
+const MOODS = [
+  {
+    label: 'Great',
+    icon: 'sparkles-outline' as const,
+  },
+  {
+    label: 'Good',
+    icon: 'happy-outline' as const,
+  },
+  {
+    label: 'Okay',
+    icon: 'remove-circle-outline' as const,
+  },
+  {
+    label: 'Low',
+    icon: 'sad-outline' as const,
+  },
+];
+
+function getLocalDate() {
+  const now = new Date();
+
+  return `${now.getFullYear()}-${String(
+    now.getMonth() + 1
+  ).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+}
+
+function formatTime(time: string) {
+  const parts = time.split(':');
+
+  if (parts.length < 2) {
+    return time;
+  }
+
+  const hour = Number(parts[0]);
+  const minute = Number(parts[1]);
+
+  const period = hour >= 12 ? 'PM' : 'AM';
+
+  const displayHour =
+    hour % 12 === 0 ? 12 : hour % 12;
+
+  return `${displayHour}:${String(minute).padStart(
+    2,
+    '0'
+  )} ${period}`;
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour < 12) {
+    return 'Good morning';
+  }
+
+  if (hour < 18) {
+    return 'Good afternoon';
+  }
+
+  return 'Good evening';
+}
+
+export default function Dashboard() {
+  const [activities, setActivities] =
+    useState<Activity[]>([]);
+
+  const [selectedMood, setSelectedMood] =
+    useState('Good');
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [processingId, setProcessingId] =
+    useState<string | null>(null);
+
+  const loadActivities = useCallback(
+    async () => {
+      try {
+        const data =
+          await fetchActivities();
+
+        setActivities(data);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Unable to load your activities.';
+
+        Alert.alert(
+          'Unable to load activities',
+          message
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    loadActivities();
+  }, [loadActivities]);
+
+  const today = getLocalDate();
+
+  const todaysActivities = useMemo(
+    () =>
+      activities.filter(
+        (activity) =>
+          activity.scheduled_date === today
+      ),
+    [activities, today]
+  );
+
+  const completedCount = todaysActivities.filter(
+    (activity) => activity.completed
+  ).length;
+
+  const pendingCount =
+    todaysActivities.length - completedCount;
+
+  const progress =
+    todaysActivities.length === 0
+      ? 0
+      : Math.round(
+          (completedCount /
+            todaysActivities.length) *
+            100
+        );
+
+  const nextActivity = useMemo(() => {
+    const pending = activities
+      .filter(
+        (activity) => !activity.completed
+      )
+      .filter(
+        (activity) =>
+          getActivityStatus(activity) ===
+            'upcoming' ||
+          getActivityStatus(activity) === 'now'
+      );
+
+    return pending[0] ?? null;
+  }, [activities]);
+
+  const overdueActivities = useMemo(
+    () =>
+      activities.filter(
+        (activity) =>
+          getActivityStatus(activity) ===
+          'overdue'
+      ),
+    [activities]
+  );
+
+  const upcomingActivities = useMemo(
+    () =>
+      todaysActivities.filter(
+        (activity) =>
+          !activity.completed
+      ),
+    [todaysActivities]
+  );
+
+  const formattedDate =
+    new Date().toLocaleDateString(
+      'en-US',
+      {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      }
+    );
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadActivities();
+  };
+
+  const handleToggleActivity = async (
+    activity: Activity
+  ) => {
+    try {
+      setProcessingId(activity.id);
+
+      const updated =
+        await updateActivityCompletion(
+          activity.id,
+          !activity.completed
+        );
+
+      setActivities((current) =>
+        current.map((item) =>
+          item.id === updated.id
+            ? updated
+            : item
+        )
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to update the activity.';
+
+      Alert.alert(
+        'Update failed',
+        message
+      );
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+      >
+        <View style={styles.loadingScreen}>
+          <View style={styles.loadingIcon}>
+            <Ionicons
+              name="checkmark"
+              size={30}
+              color="#FFFFFF"
+            />
+          </View>
+
+          <ActivityIndicator
+            size="small"
+            color="#208AEF"
+            style={styles.loadingSpinner}
+          />
+
+          <Text style={styles.loadingText}>
+            Preparing your day...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.container
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#208AEF"
+          />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerInfo}>
+            <Text style={styles.greeting}>
+              {getGreeting()} 👋
+            </Text>
+
+            <Text style={styles.name}>
+              Nyayath
+            </Text>
+
+            <Text style={styles.date}>
+              {formattedDate}
+            </Text>
+          </View>
+
+          <Pressable
+            style={styles.notificationButton}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={24}
+              color="#172033"
+            />
+
+            {upcomingActivities.length >
+              0 && (
+              <View
+                style={
+                  styles.notificationDot
+                }
+              />
+            )}
+          </Pressable>
+        </View>
+
+        {/* Next Activity */}
+        {nextActivity ? (
+          <View style={styles.nextCard}>
+            <View style={styles.nextTopRow}>
+              <View>
+                <Text style={styles.nextLabel}>
+                  UP NEXT
+                </Text>
+
+                <Text style={styles.nextCountdown}>
+                  {getActivityCountdown(
+                    nextActivity
+                  )}
+                </Text>
+              </View>
+
+              <View
+                style={styles.nextClockIcon}
+              >
+                <Ionicons
+                  name="alarm-outline"
+                  size={24}
+                  color="#208AEF"
+                />
+              </View>
+            </View>
+
+            <Text
+              style={styles.nextTitle}
+              numberOfLines={2}
+            >
+              {nextActivity.title}
+            </Text>
+
+            <View style={styles.nextMeta}>
+              <View style={styles.nextMetaItem}>
+                <Ionicons
+                  name="time-outline"
+                  size={15}
+                  color="#AAB4C5"
+                />
+
+                <Text
+                  style={styles.nextMetaText}
+                >
+                  {formatTime(
+                    nextActivity.scheduled_time
+                  )}
+                </Text>
+              </View>
+
+              <View style={styles.nextMetaItem}>
+                <Ionicons
+                  name={
+                    AREA_ICONS[
+                      nextActivity.category
+                    ] ??
+                    'ellipse-outline'
+                  }
+                  size={15}
+                  color="#AAB4C5"
+                />
+
+                <Text
+                  style={styles.nextMetaText}
+                >
+                  {nextActivity.category}
+                </Text>
+              </View>
+
+              {nextActivity.reminder && (
+                <View style={styles.nextMetaItem}>
+                  <Ionicons
+                    name="notifications-outline"
+                    size={15}
+                    color="#AAB4C5"
+                  />
+
+                  <Text
+                    style={styles.nextMetaText}
+                  >
+                    Reminder on
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <Pressable
+              onPress={() =>
+                handleToggleActivity(
+                  nextActivity
+                )
+              }
+              style={styles.nextAction}
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={19}
+                color="#208AEF"
+              />
+
+              <Text
+                style={styles.nextActionText}
+              >
+                Mark complete
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.allDoneCard}>
+            <View style={styles.allDoneIcon}>
+              <Ionicons
+                name="checkmark"
+                size={30}
+                color="#FFFFFF"
+              />
+            </View>
+
+            <Text style={styles.allDoneTitle}>
+              You're all caught up 🎉
+            </Text>
+
+            <Text
+              style={styles.allDoneText}
+            >
+              No upcoming activities. Enjoy
+              your free time or add something
+              meaningful to your day.
+            </Text>
+
+            <Pressable
+              onPress={() =>
+                router.push(
+                  '/add-activity'
+                )
+              }
+              style={styles.allDoneButton}
+            >
+              <Ionicons
+                name="add"
+                size={20}
+                color="#FFFFFF"
+              />
+
+              <Text
+                style={styles.allDoneButtonText}
+              >
+                Add activity
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Progress */}
+        <View style={styles.progressCard}>
+          <View style={styles.progressHeader}>
+            <View>
+              <Text style={styles.progressTitle}>
+                Today's progress
+              </Text>
+
+              <Text
+                style={styles.progressSubtitle}
+              >
+                {completedCount} of{' '}
+                {todaysActivities.length}{' '}
+                completed
+              </Text>
+            </View>
+
+            <Text
+              style={styles.progressPercentage}
+            >
+              {progress}%
+            </Text>
+          </View>
+
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${progress}%`,
+                },
+              ]}
+            />
+          </View>
+
+          <View style={styles.progressStats}>
+            <View>
+              <Text
+                style={styles.progressStatNumber}
+              >
+                {completedCount}
+              </Text>
+
+              <Text
+                style={styles.progressStatLabel}
+              >
+                Completed
+              </Text>
+            </View>
+
+            <View>
+              <Text
+                style={styles.progressStatNumber}
+              >
+                {pendingCount}
+              </Text>
+
+              <Text
+                style={styles.progressStatLabel}
+              >
+                Remaining
+              </Text>
+            </View>
+
+            <View>
+              <Text
+                style={styles.progressStatNumber}
+              >
+                {overdueActivities.length}
+              </Text>
+
+              <Text
+                style={styles.progressStatLabel}
+              >
+                Overdue
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Overdue */}
+        {overdueActivities.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>
+                  Needs attention
+                </Text>
+
+                <Text
+                  style={styles.sectionSubtitle}
+                >
+                  {overdueActivities.length}{' '}
+                  overdue
+                </Text>
+              </View>
+
+              <View style={styles.warningBadge}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={17}
+                  color="#EF4444"
+                />
+              </View>
+            </View>
+
+            {overdueActivities
+              .slice(0, 2)
+              .map((activity) => (
+                <ActivityCard
+                  key={activity.id}
+                  activity={activity}
+                  processingId={
+                    processingId
+                  }
+                  onToggle={
+                    handleToggleActivity
+                  }
+                />
+              ))}
+          </View>
+        )}
+
+        {/* Mood */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            How are you feeling?
+          </Text>
+
+          <View style={styles.moodRow}>
+            {MOODS.map((mood) => {
+              const selected =
+                selectedMood ===
+                mood.label;
+
+              return (
+                <Pressable
+                  key={mood.label}
+                  onPress={() =>
+                    setSelectedMood(
+                      mood.label
+                    )
+                  }
+                  style={[
+                    styles.moodButton,
+                    selected &&
+                      styles.moodButtonSelected,
+                  ]}
+                >
+                  <Ionicons
+                    name={mood.icon}
+                    size={22}
+                    color={
+                      selected
+                        ? '#FFFFFF'
+                        : '#667085'
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.moodText,
+                      selected &&
+                        styles.moodTextSelected,
+                    ]}
+                  >
+                    {mood.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Today's Activities */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>
+                Today's activities
+              </Text>
+
+              <Text
+                style={styles.sectionSubtitle}
+              >
+                Your day at a glance
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() =>
+                router.push(
+                  '/explore'
+                )
+              }
+            >
+              <Text style={styles.seeAll}>
+                See all
+              </Text>
+            </Pressable>
+          </View>
+
+          {todaysActivities.length ===
+          0 ? (
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIcon}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={25}
+                  color="#208AEF"
+                />
+              </View>
+
+              <Text style={styles.emptyTitle}>
+                Your day is open
+              </Text>
+
+              <Text style={styles.emptyText}>
+                Add your first activity and
+                start planning your day.
+              </Text>
+
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    '/add-activity'
+                  )
+                }
+                style={styles.emptyButton}
+              >
+                <Ionicons
+                  name="add"
+                  size={18}
+                  color="#FFFFFF"
+                />
+
+                <Text
+                  style={styles.emptyButtonText}
+                >
+                  Add activity
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            todaysActivities.map(
+              (activity) => (
+                <ActivityCard
+                  key={activity.id}
+                  activity={activity}
+                  processingId={
+                    processingId
+                  }
+                  onToggle={
+                    handleToggleActivity
+                  }
+                />
+              )
+            )
+          )}
+        </View>
+
+        {/* Life Areas */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>
+                Life areas
+              </Text>
+
+              <Text
+                style={styles.sectionSubtitle}
+              >
+                Keep every part of life moving
+              </Text>
+            </View>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={
+              false
+            }
+            contentContainerStyle={
+              styles.lifeAreaScroll
+            }
+          >
+            {LIFE_AREAS.map((area) => {
+              const count =
+                activities.filter(
+                  (activity) =>
+                    activity.category ===
+                    area.name
+                ).length;
+
+              return (
+                <Pressable
+                  key={area.name}
+                  style={styles.lifeAreaCard}
+                >
+                  <View
+                    style={
+                      styles.lifeAreaIcon
+                    }
+                  >
+                    <Ionicons
+                      name={area.icon}
+                      size={21}
+                      color="#208AEF"
+                    />
+                  </View>
+
+                  <Text
+                    style={
+                      styles.lifeAreaName
+                    }
+                  >
+                    {area.name}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.lifeAreaCount
+                    }
+                  >
+                    {count}{' '}
+                    {count === 1
+                      ? 'activity'
+                      : 'activities'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Motivation */}
+        <View style={styles.motivationCard}>
+          <View style={styles.motivationIcon}>
+            <Ionicons
+              name="sparkles-outline"
+              size={24}
+              color="#208AEF"
+            />
+          </View>
+
+          <View
+            style={styles.motivationContent}
+          >
+            <Text
+              style={styles.motivationTitle}
+            >
+              Today's thought
+            </Text>
+
+            <Text
+              style={styles.motivationText}
+            >
+              You don't need a perfect day.
+              You only need to keep moving
+              toward what matters.
+            </Text>
+          </View>
+        </View>
+
+        {/* Add */}
+        <Pressable
+          style={styles.addButton}
+          onPress={() =>
+            router.push(
+              '/add-activity'
+            )
+          }
+        >
+          <Ionicons
+            name="add"
+            size={24}
+            color="#FFFFFF"
+          />
+
+          <Text style={styles.addButtonText}>
+            Add activity
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ActivityCard({
+  activity,
+  processingId,
+  onToggle,
+}: {
+  activity: Activity;
+  processingId: string | null;
+  onToggle: (
+    activity: Activity
+  ) => void;
+}) {
+  const status =
+    getActivityStatus(activity);
+
+  const icon =
+    AREA_ICONS[activity.category] ??
+    'ellipse-outline';
+
+  const processing =
+    processingId === activity.id;
+
+  return (
+    <Pressable
+      onPress={() => onToggle(activity)}
+      style={[
+        styles.activityCard,
+        activity.completed &&
+          styles.activityCompleted,
+        status === 'overdue' &&
+          styles.activityOverdue,
+      ]}
+    >
+      <View
+        style={[
+          styles.activityIcon,
+          activity.completed &&
+            styles.activityIconCompleted,
+          status === 'overdue' &&
+            styles.activityIconOverdue,
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={21}
+          color={
+            activity.completed
+              ? '#FFFFFF'
+              : status === 'overdue'
+                ? '#EF4444'
+                : '#208AEF'
+          }
+        />
+      </View>
+
+      <View style={styles.activityInfo}>
+        <Text
+          style={[
+            styles.activityTitle,
+            activity.completed &&
+              styles.completedText,
+          ]}
+          numberOfLines={2}
+        >
+          {activity.title}
+        </Text>
+
+        <View style={styles.activityMeta}>
+          <Ionicons
+            name="time-outline"
+            size={13}
+            color="#667085"
+          />
+
+          <Text style={styles.activityTime}>
+            {formatTime(
+              activity.scheduled_time
+            )}
+          </Text>
+
+          <View style={styles.categoryDot} />
+
+          <Text
+            style={styles.activityCategory}
+          >
+            {activity.category}
+          </Text>
+        </View>
+
+        {status === 'overdue' &&
+          !activity.completed && (
+            <Text
+              style={styles.overdueText}
+            >
+              Overdue · Tap to complete
+            </Text>
+          )}
+
+        {status === 'now' &&
+          !activity.completed && (
+            <Text
+              style={styles.nowText}
+            >
+              Happening now
+            </Text>
+          )}
+      </View>
+
+      {processing ? (
+        <ActivityIndicator
+          size="small"
+          color="#208AEF"
+        />
+      ) : (
+        <View
+          style={[
+            styles.checkButton,
+            activity.completed &&
+              styles.checkButtonCompleted,
+          ]}
+        >
+          {activity.completed && (
+            <Ionicons
+              name="checkmark"
+              size={17}
+              color="#FFFFFF"
+            />
+          )}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F6F8FC',
+  },
+
+  container: {
+    padding: 20,
+    paddingBottom: 45,
+  },
+
+  loadingScreen: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loadingIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loadingSpinner: {
+    marginTop: 18,
+  },
+
+  loadingText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#667085',
+  },
+
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 22,
+  },
+
+  headerInfo: {
+    flex: 1,
+  },
+
+  greeting: {
+    fontSize: 14,
+    color: '#667085',
+    marginBottom: 3,
+  },
+
+  name: {
+    fontSize: 29,
+    fontWeight: '800',
+    color: '#172033',
+  },
+
+  date: {
+    marginTop: 5,
+    fontSize: 13,
+    color: '#667085',
+  },
+
+  notificationButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+
+  notificationDot: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    right: 10,
+    top: 9,
+  },
+
+  nextCard: {
+    backgroundColor: '#172033',
+    borderRadius: 25,
+    padding: 20,
+    marginBottom: 15,
+  },
+
+  nextTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+
+  nextLabel: {
+    color: '#7FA8D8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+
+  nextCountdown: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+
+  nextClockIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  nextTitle: {
+    color: '#FFFFFF',
+    fontSize: 21,
+    lineHeight: 27,
+    fontWeight: '800',
+    marginTop: 17,
+  },
+
+  nextMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 13,
+  },
+
+  nextMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  nextMetaText: {
+    color: '#AAB4C5',
+    fontSize: 11,
+    marginLeft: 5,
+  },
+
+  nextAction: {
+    height: 45,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+    gap: 7,
+  },
+
+  nextActionText: {
+    color: '#208AEF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  allDoneCard: {
+    backgroundColor: '#172033',
+    borderRadius: 25,
+    padding: 23,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+
+  allDoneIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  allDoneTitle: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: '800',
+    marginTop: 13,
+  },
+
+  allDoneText: {
+    color: '#AAB4C5',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: 7,
+  },
+
+  allDoneButton: {
+    height: 45,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    backgroundColor: '#208AEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 15,
+  },
+
+  allDoneButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  progressCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 19,
+    marginBottom: 26,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  progressTitle: {
+    color: '#172033',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+
+  progressSubtitle: {
+    color: '#667085',
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  progressPercentage: {
+    color: '#208AEF',
+    fontSize: 27,
+    fontWeight: '800',
+  },
+
+  progressTrack: {
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#EEF1F5',
+    overflow: 'hidden',
+    marginTop: 17,
+  },
+
+  progressFill: {
+    height: '100%',
+    borderRadius: 5,
+    backgroundColor: '#208AEF',
+  },
+
+  progressStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 17,
+  },
+
+  progressStatNumber: {
+    color: '#172033',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
+  progressStatLabel: {
+    color: '#98A2B3',
+    fontSize: 10,
+    marginTop: 2,
+  },
+
+  section: {
+    marginBottom: 27,
+  },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 13,
+  },
+
+  sectionTitle: {
+    color: '#172033',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+
+  sectionSubtitle: {
+    color: '#98A2B3',
+    fontSize: 11,
+    marginTop: 3,
+  },
+
+  seeAll: {
+    color: '#208AEF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  warningBadge: {
+    width: 37,
+    height: 37,
+    borderRadius: 13,
+    backgroundColor: '#FEF3F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  moodRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 13,
+  },
+
+  moodButton: {
+    flex: 1,
+    minHeight: 70,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  moodButtonSelected: {
+    backgroundColor: '#208AEF',
+    borderColor: '#208AEF',
+  },
+
+  moodText: {
+    fontSize: 11,
+    color: '#667085',
+    fontWeight: '700',
+  },
+
+  moodTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 13,
+    marginBottom: 9,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  activityCompleted: {
+    opacity: 0.65,
+  },
+
+  activityOverdue: {
+    borderColor: '#FECACA',
+  },
+
+  activityIcon: {
+    width: 45,
+    height: 45,
+    borderRadius: 14,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+
+  activityIconCompleted: {
+    backgroundColor: '#208AEF',
+  },
+
+  activityIconOverdue: {
+    backgroundColor: '#FEF3F2',
+  },
+
+  activityInfo: {
+    flex: 1,
+  },
+
+  activityTitle: {
+    color: '#172033',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+
+  completedText: {
+    textDecorationLine: 'line-through',
+    color: '#98A2B3',
+  },
+
+  activityMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+
+  activityTime: {
+    color: '#667085',
+    fontSize: 11,
+    marginLeft: 4,
+  },
+
+  categoryDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#98A2B3',
+    marginHorizontal: 7,
+  },
+
+  activityCategory: {
+    color: '#667085',
+    fontSize: 11,
+  },
+
+  overdueText: {
+    color: '#EF4444',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+
+  nowText: {
+    color: '#208AEF',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+
+  checkButton: {
+    width: 27,
+    height: 27,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#D0D5DD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 9,
+  },
+
+  checkButtonCompleted: {
+    borderColor: '#208AEF',
+    backgroundColor: '#208AEF',
+  },
+
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyTitle: {
+    color: '#172033',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 12,
+  },
+
+  emptyText: {
+    color: '#667085',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 5,
+  },
+
+  emptyButton: {
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: '#208AEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 17,
+    gap: 5,
+    marginTop: 13,
+  },
+
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  lifeAreaScroll: {
+    gap: 10,
+  },
+
+  lifeAreaCard: {
+    width: 125,
+    minHeight: 122,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  lifeAreaIcon: {
+    width: 41,
+    height: 41,
+    borderRadius: 13,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  lifeAreaName: {
+    color: '#172033',
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 10,
+  },
+
+  lifeAreaCount: {
+    color: '#98A2B3',
+    fontSize: 10,
+    marginTop: 4,
+  },
+
+  motivationCard: {
+    flexDirection: 'row',
+    backgroundColor: '#EAF4FF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 22,
+  },
+
+  motivationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  motivationContent: {
+    flex: 1,
+  },
+
+  motivationTitle: {
+    color: '#172033',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  motivationText: {
+    color: '#526074',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+
+  addButton: {
+    height: 57,
+    borderRadius: 18,
+    backgroundColor: '#208AEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+});
+
+=============================
+FILE: src/app/explore.tsx
+=============================
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
+
+import {
+  Activity,
+  fetchActivities,
+  getLocalDateString,
+  updateActivityCompletion,
+} from '@/services/activities';
+
+type Filter = 'all' | 'today' | 'upcoming' | 'completed';
+
+const AREA_COLORS: Record<string, string> = {
+  Spiritual: '#8B5CF6',
+  Health: '#10B981',
+  Business: '#F59E0B',
+  Career: '#3B82F6',
+  Relationships: '#EC4899',
+  Learning: '#6366F1',
+  Personal: '#14B8A6',
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  high: '#EF4444',
+  medium: '#F59E0B',
+  low: '#10B981',
+};
+
+function getAreaColor(category?: string | null) {
+  return AREA_COLORS[category || 'Personal'] || '#208AEF';
+}
+
+function getPriorityColor(priority?: string | null) {
+  return PRIORITY_COLORS[(priority || 'medium').toLowerCase()] || '#F59E0B';
+}
+
+function formatDate(date?: string | null) {
+  if (!date) return '';
+
+  const parsed = new Date(`${date}T00:00:00`);
+
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function formatTime(time?: string | null) {
+  if (!time) return '';
+
+  const [hoursString, minutes] = time.split(':');
+  const hours = Number(hoursString);
+
+  if (Number.isNaN(hours)) return time;
+
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 || 12;
+
+  return `${displayHour}:${minutes} ${suffix}`;
+}
+
+function isToday(date?: string | null) {
+  return date === getLocalDateString();
+}
+
+function isUpcoming(date?: string | null) {
+  if (!date) return false;
+
+  return date > getLocalDateString();
+}
+
+function TaskCard({
+  task,
+  onToggle,
+}: {
+  task: Activity;
+  onToggle: (task: Activity) => void;
+}) {
+  const areaColor = getAreaColor(task.category);
+  const priorityColor = getPriorityColor(task.priority);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.taskCard,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View
+        style={[
+          styles.taskAccent,
+          { backgroundColor: areaColor },
+        ]}
+      />
+
+      <Pressable
+        onPress={() => onToggle(task)}
+        style={[
+          styles.checkbox,
+          task.completed && {
+            backgroundColor: areaColor,
+            borderColor: areaColor,
+          },
+        ]}
+      >
+        {task.completed && (
+          <Ionicons
+            name="checkmark"
+            size={16}
+            color="#FFFFFF"
+          />
+        )}
+      </Pressable>
+
+      <View style={styles.taskContent}>
+        <View style={styles.taskTitleRow}>
+          <Text
+            style={[
+              styles.taskTitle,
+              task.completed && styles.completedTitle,
+            ]}
+            numberOfLines={2}
+          >
+            {task.title}
+          </Text>
+
+          <View
+            style={[
+              styles.priorityDot,
+              { backgroundColor: priorityColor },
+            ]}
+          />
+        </View>
+
+        {!!task.description && (
+          <Text
+            style={styles.taskDescription}
+            numberOfLines={1}
+          >
+            {task.description}
+          </Text>
+        )}
+
+        <View style={styles.taskMeta}>
+          <View style={styles.metaItem}>
+            <Ionicons
+              name="time-outline"
+              size={14}
+              color="#7A8496"
+            />
+            <Text style={styles.metaText}>
+              {formatTime(task.scheduled_time)}
+            </Text>
+          </View>
+
+          <View style={styles.metaItem}>
+            <Ionicons
+              name="calendar-outline"
+              size={14}
+              color="#7A8496"
+            />
+            <Text style={styles.metaText}>
+              {isToday(task.scheduled_date)
+                ? 'Today'
+                : formatDate(task.scheduled_date)}
+            </Text>
+          </View>
+
+          {task.category && (
+            <View
+              style={[
+                styles.categoryBadge,
+                {
+                  backgroundColor: `${areaColor}15`,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.categoryText,
+                  { color: areaColor },
+                ]}
+              >
+                {task.category}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+export default function ExploreScreen() {
+  const [tasks, setTasks] = useState<Activity[]>([]);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const data = await fetchActivities();
+      setTasks(data);
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTasks();
+    }, [loadTasks])
+  );
+
+  const filteredTasks = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return tasks
+      .filter((task) => {
+        if (filter === 'today') {
+          return isToday(task.scheduled_date);
+        }
+
+        if (filter === 'upcoming') {
+          return isUpcoming(task.scheduled_date);
+        }
+
+        if (filter === 'completed') {
+          return task.completed;
+        }
+
+        return true;
+      })
+      .filter((task) => {
+        if (!query) return true;
+
+        return (
+          task.title.toLowerCase().includes(query) ||
+          task.description?.toLowerCase().includes(query) ||
+          task.category?.toLowerCase().includes(query)
+        );
+      })
+      .sort((a, b) => {
+        const dateA = `${a.scheduled_date || ''} ${
+          a.scheduled_time || ''
+        }`;
+
+        const dateB = `${b.scheduled_date || ''} ${
+          b.scheduled_time || ''
+        }`;
+
+        return dateA.localeCompare(dateB);
+      });
+  }, [tasks, filter, search]);
+
+  const counts = useMemo(() => {
+    return {
+      all: tasks.length,
+      today: tasks.filter((task) =>
+        isToday(task.scheduled_date)
+      ).length,
+      upcoming: tasks.filter((task) =>
+        isUpcoming(task.scheduled_date)
+      ).length,
+      completed: tasks.filter((task) => task.completed).length,
+    };
+  }, [tasks]);
+
+  const handleToggle = async (task: Activity) => {
+    try {
+      await updateActivityCompletion(
+        task.id,
+        !task.completed
+      );
+
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === task.id
+            ? {
+                ...item,
+                completed: !item.completed,
+                completed_at: !item.completed
+                  ? new Date().toISOString()
+                  : null,
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
+
+  const renderFilter = (
+    value: Filter,
+    label: string,
+    count: number
+  ) => {
+    const active = filter === value;
+
+    return (
+      <Pressable
+        onPress={() => setFilter(value)}
+        style={[
+          styles.filterButton,
+          active && styles.filterButtonActive,
+        ]}
+      >
+        <Text
+          style={[
+            styles.filterText,
+            active && styles.filterTextActive,
+          ]}
+        >
+          {label}
+        </Text>
+
+        <View
+          style={[
+            styles.filterCount,
+            active && styles.filterCountActive,
+          ]}
+        >
+          <Text
+            style={[
+              styles.filterCountText,
+              active && styles.filterCountTextActive,
+            ]}
+          >
+            {count}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.eyebrow}>YOUR TASKS</Text>
+            <Text style={styles.headerTitle}>
+              All tasks
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={() => router.push('/add-activity')}
+            style={styles.addButton}
+          >
+            <Ionicons
+              name="add"
+              size={24}
+              color="#FFFFFF"
+            />
+          </Pressable>
+        </View>
+
+        <View style={styles.searchBox}>
+          <Ionicons
+            name="search-outline"
+            size={20}
+            color="#8B95A7"
+          />
+
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search your tasks..."
+            placeholderTextColor="#9AA3B2"
+            style={styles.searchInput}
+          />
+
+          {search.length > 0 && (
+            <Pressable
+              onPress={() => setSearch('')}
+            >
+              <Ionicons
+                name="close-circle"
+                size={19}
+                color="#9AA3B2"
+              />
+            </Pressable>
+          )}
+        </View>
+
+        <FlatList
+          horizontal
+          data={[
+            ['all', 'All', counts.all],
+            ['today', 'Today', counts.today],
+            ['upcoming', 'Upcoming', counts.upcoming],
+            ['completed', 'Completed', counts.completed],
+          ] as [Filter, string, number][]}
+          keyExtractor={([value]) => value}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+          renderItem={({ item }) =>
+            renderFilter(item[0], item[1], item[2])
+          }
+        />
+
+        {loading ? (
+          <View style={styles.centerState}>
+            <ActivityIndicator
+              size="large"
+              color="#208AEF"
+            />
+            <Text style={styles.stateText}>
+              Loading your tasks...
+            </Text>
+          </View>
+        ) : filteredTasks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Ionicons
+                name={
+                  search
+                    ? 'search-outline'
+                    : filter === 'completed'
+                    ? 'checkmark-done-outline'
+                    : 'calendar-outline'
+                }
+                size={32}
+                color="#208AEF"
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>
+              {search
+                ? 'No tasks found'
+                : filter === 'completed'
+                ? 'Nothing completed yet'
+                : filter === 'upcoming'
+                ? 'No upcoming tasks'
+                : filter === 'today'
+                ? 'Your day is open'
+                : 'No tasks yet'}
+            </Text>
+
+            <Text style={styles.emptyDescription}>
+              {search
+                ? 'Try another search term.'
+                : filter === 'completed'
+                ? 'Completed tasks will appear here.'
+                : 'Create your first task and start planning your day.'}
+            </Text>
+
+            {!search && filter !== 'completed' && (
+              <Pressable
+                onPress={() =>
+                  router.push('/add-activity')
+                }
+                style={styles.emptyButton}
+              >
+                <Ionicons
+                  name="add"
+                  size={19}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.emptyButtonText}>
+                  Add task
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredTasks}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.taskList}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true);
+                  loadTasks();
+                }}
+                tintColor="#208AEF"
+              />
+            }
+            renderItem={({ item }) => (
+              <TaskCard
+                task={item}
+                onToggle={handleToggle}
+              />
+            )}
+            ListHeaderComponent={
+              <View style={styles.listHeader}>
+                <View>
+                  <Text style={styles.listTitle}>
+                    {filter === 'all'
+                      ? 'Everything'
+                      : filter === 'today'
+                      ? "Today's tasks"
+                      : filter === 'upcoming'
+                      ? 'Coming up'
+                      : 'Completed tasks'}
+                  </Text>
+
+                  <Text style={styles.listSubtitle}>
+                    {filteredTasks.length}{' '}
+                    {filteredTasks.length === 1
+                      ? 'task'
+                      : 'tasks'}
+                  </Text>
+                </View>
+              </View>
+            }
+          />
+        )}
+
+        <Pressable
+          onPress={() => router.push('/add-activity')}
+          style={({ pressed }) => [
+            styles.floatingButton,
+            pressed && styles.floatingButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name="add"
+            size={25}
+            color="#FFFFFF"
+          />
+          <Text style={styles.floatingText}>
+            Add task
+          </Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F6F8FC',
+  },
+
+  container: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 20,
+    paddingBottom: 18,
+  },
+
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    color: '#208AEF',
+    marginBottom: 5,
+  },
+
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#172033',
+  },
+
+  addButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#208AEF',
+    shadowColor: '#208AEF',
+    shadowOffset: {
+      width: 0,
+      height: 7,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+
+  searchBox: {
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E7EBF2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    marginBottom: 14,
+  },
+
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#172033',
+    marginLeft: 10,
+  },
+
+  filters: {
+    paddingBottom: 18,
+    gap: 9,
+  },
+
+  filterButton: {
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5EAF1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  filterButtonActive: {
+    backgroundColor: '#208AEF',
+    borderColor: '#208AEF',
+  },
+
+  filterText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#657083',
+  },
+
+  filterTextActive: {
+    color: '#FFFFFF',
+  },
+
+  filterCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 5,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F3F7',
+  },
+
+  filterCountActive: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+
+  filterCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#667085',
+  },
+
+  filterCountTextActive: {
+    color: '#FFFFFF',
+  },
+
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+  },
+
+  listTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#172033',
+  },
+
+  listSubtitle: {
+    fontSize: 13,
+    color: '#8A94A6',
+    marginTop: 3,
+  },
+
+  taskList: {
+    paddingBottom: 110,
+  },
+
+  taskCard: {
+    minHeight: 104,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    marginBottom: 12,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E9EDF3',
+    shadowColor: '#172033',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  pressed: {
+    opacity: 0.8,
+  },
+
+  taskAccent: {
+    width: 4,
+    height: '100%',
+  },
+
+  checkbox: {
+    width: 23,
+    height: 23,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#D5DBE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 14,
+    marginTop: 17,
+  },
+
+  taskContent: {
+    flex: 1,
+    padding: 14,
+    paddingLeft: 11,
+  },
+
+  taskTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  taskTitle: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '750',
+    color: '#1D2738',
+  },
+
+  completedTitle: {
+    textDecorationLine: 'line-through',
+    color: '#98A1B1',
+  },
+
+  priorityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 6,
+    marginLeft: 8,
+  },
+
+  taskDescription: {
+    fontSize: 12,
+    color: '#8A94A6',
+    marginTop: 4,
+  },
+
+  taskMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
+  },
+
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  metaText: {
+    fontSize: 11,
+    color: '#7A8496',
+    fontWeight: '600',
+  },
+
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
+  },
+
+  categoryText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  centerState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 80,
+  },
+
+  stateText: {
+    marginTop: 12,
+    color: '#7A8496',
+    fontSize: 14,
+  },
+
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 35,
+    paddingBottom: 80,
+  },
+
+  emptyIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF4FF',
+    marginBottom: 18,
+  },
+
+  emptyTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#172033',
+    textAlign: 'center',
+  },
+
+  emptyDescription: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#7A8496',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  emptyButton: {
+    marginTop: 20,
+    height: 46,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    backgroundColor: '#208AEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  floatingButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 22,
+    height: 52,
+    paddingHorizontal: 18,
+    borderRadius: 17,
+    backgroundColor: '#208AEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    shadowColor: '#208AEF',
+    shadowOffset: {
+      width: 0,
+      height: 7,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 7,
+  },
+
+  floatingButtonPressed: {
+    transform: [{ scale: 0.97 }],
+  },
+
+  floatingText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+});
+
+=============================
+FILE: src/app/add-activity.tsx
+=============================
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  createActivity,
+  getLocalDateString,
+} from '@/services/activities';
+
+type LifeArea = {
+  name: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+
+type ReminderOption = {
+  label: string;
+  minutes: number | null;
+};
+
+const LIFE_AREAS: LifeArea[] = [
+  {
+    name: 'Spiritual',
+    icon: 'heart-outline',
+  },
+  {
+    name: 'Health',
+    icon: 'fitness-outline',
+  },
+  {
+    name: 'Business',
+    icon: 'wallet-outline',
+  },
+  {
+    name: 'Career',
+    icon: 'briefcase-outline',
+  },
+  {
+    name: 'Relationships',
+    icon: 'people-outline',
+  },
+  {
+    name: 'Learning',
+    icon: 'school-outline',
+  },
+  {
+    name: 'Personal',
+    icon: 'person-outline',
+  },
+];
+
+const REPEAT_OPTIONS = [
+  {
+    value: 'none',
+    label: 'Does not repeat',
+  },
+  {
+    value: 'daily',
+    label: 'Every day',
+  },
+  {
+    value: 'weekdays',
+    label: 'Weekdays',
+  },
+  {
+    value: 'weekends',
+    label: 'Weekends',
+  },
+  {
+    value: 'weekly',
+    label: 'Every week',
+  },
+  {
+    value: 'monthly',
+    label: 'Every month',
+  },
+];
+
+const PRIORITIES = [
+  {
+    value: 'low',
+    label: 'Low',
+    icon: 'arrow-down-outline' as const,
+  },
+  {
+    value: 'medium',
+    label: 'Medium',
+    icon: 'remove-outline' as const,
+  },
+  {
+    value: 'high',
+    label: 'High',
+    icon: 'arrow-up-outline' as const,
+  },
+];
+
+const REMINDER_OPTIONS: ReminderOption[] = [
+  {
+    label: 'At activity time',
+    minutes: 0,
+  },
+  {
+    label: '5 minutes before',
+    minutes: 5,
+  },
+  {
+    label: '10 minutes before',
+    minutes: 10,
+  },
+  {
+    label: '15 minutes before',
+    minutes: 15,
+  },
+  {
+    label: '30 minutes before',
+    minutes: 30,
+  },
+  {
+    label: '1 hour before',
+    minutes: 60,
+  },
+];
+
+function formatDate(date: Date) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function to24Hour(
+  hour: number,
+  minute: number,
+  period: 'AM' | 'PM'
+) {
+  let convertedHour = hour;
+
+  if (period === 'AM' && hour === 12) {
+    convertedHour = 0;
+  }
+
+  if (period === 'PM' && hour !== 12) {
+    convertedHour = hour + 12;
+  }
+
+  return `${String(convertedHour).padStart(2, '0')}:${String(
+    minute
+  ).padStart(2, '0')}:00`;
+}
+
+function getDateKey(date: Date) {
+  return getLocalDateString(date);
+}
+
+export default function AddActivityScreen() {
+  const [activityName, setActivityName] = useState('');
+  const [description, setDescription] = useState('');
+
+  const [selectedArea, setSelectedArea] =
+    useState('Personal');
+
+  const [selectedDate, setSelectedDate] =
+    useState(new Date());
+
+  const [selectedHour, setSelectedHour] =
+    useState(9);
+
+  const [selectedMinute, setSelectedMinute] =
+    useState(0);
+
+  const [selectedPeriod, setSelectedPeriod] =
+    useState<'AM' | 'PM'>('AM');
+
+  const [repeat, setRepeat] =
+    useState('none');
+
+  const [priority, setPriority] =
+    useState('medium');
+
+  const [reminder, setReminder] =
+    useState(true);
+
+  const [reminderMinutes, setReminderMinutes] =
+    useState<number | null>(5);
+
+  const [showDateModal, setShowDateModal] =
+    useState(false);
+
+  const [showTimeModal, setShowTimeModal] =
+    useState(false);
+
+  const [showRepeatModal, setShowRepeatModal] =
+    useState(false);
+
+  const [showReminderModal, setShowReminderModal] =
+    useState(false);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const selectedAreaData = useMemo(
+    () =>
+      LIFE_AREAS.find(
+        (area) => area.name === selectedArea
+      ) ?? LIFE_AREAS[0],
+    [selectedArea]
+  );
+
+  const selectedRepeatLabel = useMemo(
+    () =>
+      REPEAT_OPTIONS.find(
+        (option) => option.value === repeat
+      )?.label ?? 'Does not repeat',
+    [repeat]
+  );
+
+  const selectedReminderLabel = useMemo(() => {
+    if (!reminder) {
+      return 'No reminder';
+    }
+
+    return (
+      REMINDER_OPTIONS.find(
+        (option) =>
+          option.minutes === reminderMinutes
+      )?.label ?? '5 minutes before'
+    );
+  }, [reminder, reminderMinutes]);
+
+  const scheduledTime = to24Hour(
+    selectedHour,
+    selectedMinute,
+    selectedPeriod
+  );
+
+  const handleSave = async () => {
+    const title = activityName.trim();
+
+    if (!title) {
+      Alert.alert(
+        'Activity name required',
+        'Give your activity a name so you know what you need to do.'
+      );
+      return;
+    }
+
+    if (title.length > 200) {
+      Alert.alert(
+        'Activity name too long',
+        'Please keep the activity name under 200 characters.'
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      await createActivity({
+  title,
+  description: description.trim(),
+  category: selectedArea,
+  scheduled_date: getDateKey(selectedDate),
+  scheduled_time: scheduledTime,
+  repeat,
+  priority,
+  reminder,
+  reminder_minutes: reminder
+    ? reminderMinutes ?? 5
+    : undefined,
+});
+
+      Alert.alert(
+        'Activity created 🎉',
+        reminder
+          ? `We'll remind you ${selectedReminderLabel.toLowerCase()}.`
+          : 'Your activity has been added to your schedule.',
+        [
+          {
+            text: 'Done',
+            onPress: () => router.back(),
+          },
+        ]
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while creating your activity.';
+
+      Alert.alert(
+        'Could not create activity',
+        message
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changeDay = (amount: number) => {
+    const next = new Date(selectedDate);
+    next.setDate(next.getDate() + amount);
+    setSelectedDate(next);
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.header}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={23}
+            color="#172033"
+          />
+        </Pressable>
+
+        <Text style={styles.headerTitle}>
+          New activity
+        </Text>
+
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.hero}>
+          <View style={styles.heroIcon}>
+            <Ionicons
+              name="sparkles-outline"
+              size={30}
+              color="#208AEF"
+            />
+          </View>
+
+          <Text style={styles.heroTitle}>
+            Plan something meaningful
+          </Text>
+
+          <Text style={styles.heroSubtitle}>
+            Schedule an activity and we'll help you
+            stay on track.
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>
+            ACTIVITY
+          </Text>
+
+          <TextInput
+            value={activityName}
+            onChangeText={setActivityName}
+            placeholder="What do you want to accomplish?"
+            placeholderTextColor="#98A2B3"
+            style={styles.titleInput}
+            maxLength={200}
+            autoFocus
+          />
+
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Add a description (optional)"
+            placeholderTextColor="#98A2B3"
+            style={[
+              styles.descriptionInput,
+              styles.multilineInput,
+            ]}
+            multiline
+            textAlignVertical="top"
+            maxLength={1000}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>
+            LIFE AREA
+          </Text>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalOptions}
+          >
+            {LIFE_AREAS.map((area) => {
+              const selected =
+                selectedArea === area.name;
+
+              return (
+                <Pressable
+                  key={area.name}
+                  onPress={() =>
+                    setSelectedArea(area.name)
+                  }
+                  style={[
+                    styles.areaCard,
+                    selected &&
+                      styles.areaCardSelected,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.areaIcon,
+                      selected &&
+                        styles.areaIconSelected,
+                    ]}
+                  >
+                    <Ionicons
+                      name={area.icon}
+                      size={20}
+                      color={
+                        selected
+                          ? '#FFFFFF'
+                          : '#208AEF'
+                      }
+                    />
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.areaText,
+                      selected &&
+                        styles.areaTextSelected,
+                    ]}
+                  >
+                    {area.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>
+            WHEN
+          </Text>
+
+          <View style={styles.scheduleCard}>
+            <View style={styles.scheduleRow}>
+              <View style={styles.scheduleRowIcon}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={22}
+                  color="#208AEF"
+                />
+              </View>
+
+              <View style={styles.scheduleInfo}>
+                <Text style={styles.scheduleTitle}>
+                  Date
+                </Text>
+
+                <Text style={styles.scheduleValue}>
+                  {formatDate(selectedDate)}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() =>
+                  setShowDateModal(true)
+                }
+                style={styles.changeButton}
+              >
+                <Text style={styles.changeButtonText}>
+                  Change
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.scheduleRow}>
+              <View style={styles.scheduleRowIcon}>
+                <Ionicons
+                  name="time-outline"
+                  size={22}
+                  color="#208AEF"
+                />
+              </View>
+
+              <View style={styles.scheduleInfo}>
+                <Text style={styles.scheduleTitle}>
+                  Time
+                </Text>
+
+                <Text style={styles.scheduleValue}>
+                  {formatTime(
+                    new Date(
+                      2026,
+                      0,
+                      1,
+                      selectedPeriod === 'PM' &&
+                        selectedHour !== 12
+                        ? selectedHour + 12
+                        : selectedPeriod === 'AM' &&
+                            selectedHour === 12
+                          ? 0
+                          : selectedHour,
+                      selectedMinute
+                    )
+                  )}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() =>
+                  setShowTimeModal(true)
+                }
+                style={styles.changeButton}
+              >
+                <Text style={styles.changeButtonText}>
+                  Change
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.quickDateRow}>
+            <Pressable
+              onPress={() =>
+                setSelectedDate(new Date())
+              }
+              style={styles.quickDateButton}
+            >
+              <Text style={styles.quickDateText}>
+                Today
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                const tomorrow = new Date();
+                tomorrow.setDate(
+                  tomorrow.getDate() + 1
+                );
+                setSelectedDate(tomorrow);
+              }}
+              style={styles.quickDateButton}
+            >
+              <Text style={styles.quickDateText}>
+                Tomorrow
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => changeDay(7)}
+              style={styles.quickDateButton}
+            >
+              <Text style={styles.quickDateText}>
+                Next week
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>
+            REPEAT
+          </Text>
+
+          <Pressable
+            onPress={() =>
+              setShowRepeatModal(true)
+            }
+            style={styles.selectCard}
+          >
+            <View style={styles.selectIcon}>
+              <Ionicons
+                name="repeat-outline"
+                size={22}
+                color="#208AEF"
+              />
+            </View>
+
+            <View style={styles.selectContent}>
+              <Text style={styles.selectTitle}>
+                Repeat
+              </Text>
+
+              <Text style={styles.selectValue}>
+                {selectedRepeatLabel}
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color="#98A2B3"
+            />
+          </Pressable>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>
+            PRIORITY
+          </Text>
+
+          <View style={styles.priorityRow}>
+            {PRIORITIES.map((item) => {
+              const selected =
+                priority === item.value;
+
+              return (
+                <Pressable
+                  key={item.value}
+                  onPress={() =>
+                    setPriority(item.value)
+                  }
+                  style={[
+                    styles.priorityButton,
+                    selected &&
+                      styles.priorityButtonSelected,
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icon}
+                    size={18}
+                    color={
+                      selected
+                        ? '#FFFFFF'
+                        : '#667085'
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.priorityText,
+                      selected &&
+                        styles.priorityTextSelected,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>
+            REMINDER
+          </Text>
+
+          <View style={styles.reminderCard}>
+            <View style={styles.reminderIcon}>
+              <Ionicons
+                name="notifications-outline"
+                size={22}
+                color="#208AEF"
+              />
+            </View>
+
+            <View style={styles.reminderContent}>
+              <Text style={styles.reminderTitle}>
+                Remind me
+              </Text>
+
+              <Text style={styles.reminderSubtitle}>
+                {reminder
+                  ? selectedReminderLabel
+                  : 'No reminder'}
+              </Text>
+            </View>
+
+            <Switch
+              value={reminder}
+              onValueChange={(value) => {
+                setReminder(value);
+
+                if (
+                  value &&
+                  reminderMinutes === null
+                ) {
+                  setReminderMinutes(5);
+                }
+              }}
+              trackColor={{
+                false: '#D0D5DD',
+                true: '#A9D5FF',
+              }}
+              thumbColor={
+                reminder
+                  ? '#208AEF'
+                  : '#F2F4F7'
+              }
+            />
+          </View>
+
+          {reminder && (
+            <Pressable
+              onPress={() =>
+                setShowReminderModal(true)
+              }
+              style={styles.reminderOption}
+            >
+              <Text style={styles.reminderOptionText}>
+                {selectedReminderLabel}
+              </Text>
+
+              <Ionicons
+                name="chevron-down"
+                size={18}
+                color="#667085"
+              />
+            </Pressable>
+          )}
+
+          <View style={styles.reminderTip}>
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color="#208AEF"
+            />
+
+            <Text style={styles.reminderTipText}>
+              Your reminder will be scheduled
+              automatically when notifications are
+              enabled.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.previewCard}>
+          <Text style={styles.previewLabel}>
+            PREVIEW
+          </Text>
+
+          <View style={styles.previewRow}>
+            <View style={styles.previewIcon}>
+              <Ionicons
+                name={selectedAreaData.icon}
+                size={22}
+                color="#208AEF"
+              />
+            </View>
+
+            <View style={styles.previewContent}>
+              <Text style={styles.previewTitle}>
+                {activityName.trim() ||
+                  'Your activity'}
+              </Text>
+
+              <Text style={styles.previewMeta}>
+                {selectedArea} ·{' '}
+                {formatDate(selectedDate)} ·{' '}
+                {formatTime(
+                  new Date(
+                    2026,
+                    0,
+                    1,
+                    selectedPeriod === 'PM' &&
+                      selectedHour !== 12
+                      ? selectedHour + 12
+                      : selectedPeriod === 'AM' &&
+                          selectedHour === 12
+                        ? 0
+                        : selectedHour,
+                    selectedMinute
+                  )
+                )}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <Pressable
+          onPress={handleSave}
+          disabled={saving}
+          style={({ pressed }) => [
+            styles.saveButton,
+            pressed && styles.saveButtonPressed,
+            saving && styles.saveButtonDisabled,
+          ]}
+        >
+          {saving ? (
+            <ActivityIndicator
+              color="#FFFFFF"
+            />
+          ) : (
+            <>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={23}
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.saveButtonText}>
+                Create activity
+              </Text>
+            </>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.back()}
+          disabled={saving}
+          style={styles.cancelButton}
+        >
+          <Text style={styles.cancelButtonText}>
+            Cancel
+          </Text>
+        </Pressable>
+      </ScrollView>
+
+      {/* Date Modal */}
+      <Modal
+        visible={showDateModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setShowDateModal(false)
+        }
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Choose date
+              </Text>
+
+              <Pressable
+                onPress={() =>
+                  setShowDateModal(false)
+                }
+              >
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color="#172033"
+                />
+              </Pressable>
+            </View>
+
+            <View style={styles.datePreview}>
+              <Text style={styles.datePreviewDay}>
+                {selectedDate.toLocaleDateString(
+                  'en-US',
+                  { weekday: 'short' }
+                )}
+              </Text>
+
+              <Text style={styles.datePreviewNumber}>
+                {selectedDate.getDate()}
+              </Text>
+
+              <Text style={styles.datePreviewMonth}>
+                {selectedDate.toLocaleDateString(
+                  'en-US',
+                  { month: 'long' }
+                )}
+              </Text>
+            </View>
+
+            <View style={styles.dateControls}>
+              <Pressable
+                onPress={() => changeDay(-1)}
+                style={styles.dateArrow}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={22}
+                  color="#172033"
+                />
+              </Pressable>
+
+              <Text style={styles.dateControlText}>
+                {formatDate(selectedDate)}
+              </Text>
+
+              <Pressable
+                onPress={() => changeDay(1)}
+                style={styles.dateArrow}
+              >
+                <Ionicons
+                  name="chevron-forward"
+                  size={22}
+                  color="#172033"
+                />
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                setSelectedDate(new Date());
+                setShowDateModal(false);
+              }}
+              style={styles.todayButton}
+            >
+              <Text style={styles.todayButtonText}>
+                Use today
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() =>
+                setShowDateModal(false)
+              }
+              style={styles.modalDoneButton}
+            >
+              <Text style={styles.modalDoneText}>
+                Done
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Time Modal */}
+      <Modal
+        visible={showTimeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setShowTimeModal(false)
+        }
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Choose time
+              </Text>
+
+              <Pressable
+                onPress={() =>
+                  setShowTimeModal(false)
+                }
+              >
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color="#172033"
+                />
+              </Pressable>
+            </View>
+
+            <View style={styles.timePicker}>
+              <View style={styles.timeColumn}>
+                {[7, 8, 9, 10, 11, 12].map(
+                  (hour) => (
+                    <Pressable
+                      key={hour}
+                      onPress={() =>
+                        setSelectedHour(hour)
+                      }
+                      style={[
+                        styles.timeChoice,
+                        selectedHour === hour &&
+                          styles.timeChoiceSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.timeChoiceText,
+                          selectedHour === hour &&
+                            styles.timeChoiceTextSelected,
+                        ]}
+                      >
+                        {hour}
+                      </Text>
+                    </Pressable>
+                  )
+                )}
+              </View>
+
+              <Text style={styles.timeSeparator}>
+                :
+              </Text>
+
+              <View style={styles.timeColumn}>
+                {[0, 15, 30, 45].map(
+                  (minute) => (
+                    <Pressable
+                      key={minute}
+                      onPress={() =>
+                        setSelectedMinute(minute)
+                      }
+                      style={[
+                        styles.timeChoice,
+                        selectedMinute === minute &&
+                          styles.timeChoiceSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.timeChoiceText,
+                          selectedMinute === minute &&
+                            styles.timeChoiceTextSelected,
+                        ]}
+                      >
+                        {String(minute).padStart(
+                          2,
+                          '0'
+                        )}
+                      </Text>
+                    </Pressable>
+                  )
+                )}
+              </View>
+
+              <View style={styles.periodColumn}>
+                {(['AM', 'PM'] as const).map(
+                  (period) => (
+                    <Pressable
+                      key={period}
+                      onPress={() =>
+                        setSelectedPeriod(period)
+                      }
+                      style={[
+                        styles.periodChoice,
+                        selectedPeriod === period &&
+                          styles.periodChoiceSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.periodChoiceText,
+                          selectedPeriod === period &&
+                            styles.periodChoiceTextSelected,
+                        ]}
+                      >
+                        {period}
+                      </Text>
+                    </Pressable>
+                  )
+                )}
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() =>
+                setShowTimeModal(false)
+              }
+              style={styles.modalDoneButton}
+            >
+              <Text style={styles.modalDoneText}>
+                Set time
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Repeat Modal */}
+      <Modal
+        visible={showRepeatModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setShowRepeatModal(false)
+        }
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Repeat activity
+              </Text>
+
+              <Pressable
+                onPress={() =>
+                  setShowRepeatModal(false)
+                }
+              >
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color="#172033"
+                />
+              </Pressable>
+            </View>
+
+            {REPEAT_OPTIONS.map((option) => {
+              const selected =
+                repeat === option.value;
+
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => {
+                    setRepeat(option.value);
+                    setShowRepeatModal(false);
+                  }}
+                  style={[
+                    styles.modalOption,
+                    selected &&
+                      styles.modalOptionSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      selected &&
+                        styles.modalOptionTextSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+
+                  {selected && (
+                    <Ionicons
+                      name="checkmark"
+                      size={21}
+                      color="#208AEF"
+                    />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reminder Modal */}
+      <Modal
+        visible={showReminderModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setShowReminderModal(false)
+        }
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Reminder time
+              </Text>
+
+              <Pressable
+                onPress={() =>
+                  setShowReminderModal(false)
+                }
+              >
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color="#172033"
+                />
+              </Pressable>
+            </View>
+
+            {REMINDER_OPTIONS.map((option) => {
+              const selected =
+                reminderMinutes ===
+                option.minutes;
+
+              return (
+                <Pressable
+                  key={option.label}
+                  onPress={() => {
+                    setReminderMinutes(
+                      option.minutes
+                    );
+                    setReminder(true);
+                    setShowReminderModal(false);
+                  }}
+                  style={[
+                    styles.modalOption,
+                    selected &&
+                      styles.modalOptionSelected,
+                  ]}
+                >
+                  <View>
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        selected &&
+                          styles.modalOptionTextSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+
+                    {option.minutes === 5 && (
+                      <Text
+                        style={styles.recommendedText}
+                      >
+                        Recommended
+                      </Text>
+                    )}
+                  </View>
+
+                  {selected && (
+                    <Ionicons
+                      name="checkmark"
+                      size={21}
+                      color="#208AEF"
+                    />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F6F8FC',
+  },
+
+  header: {
+    height: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    backgroundColor: '#F6F8FC',
+  },
+
+  backButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#172033',
+  },
+
+  headerSpacer: {
+    width: 42,
+  },
+
+  container: {
+    padding: 20,
+    paddingBottom: 50,
+  },
+
+  hero: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 26,
+  },
+
+  heroIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#172033',
+    textAlign: 'center',
+  },
+
+  heroSubtitle: {
+    marginTop: 7,
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#667085',
+    textAlign: 'center',
+    maxWidth: 330,
+  },
+
+  section: {
+    marginBottom: 25,
+  },
+
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: '#98A2B3',
+    marginBottom: 10,
+  },
+
+  titleInput: {
+    minHeight: 58,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+    paddingHorizontal: 17,
+    fontSize: 16,
+    color: '#172033',
+    fontWeight: '600',
+  },
+
+  descriptionInput: {
+    minHeight: 92,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+    paddingHorizontal: 17,
+    paddingTop: 16,
+    fontSize: 14,
+    color: '#172033',
+    marginTop: 10,
+  },
+
+  multilineInput: {
+    textAlignVertical: 'top',
+  },
+
+  horizontalOptions: {
+    gap: 9,
+  },
+
+  areaCard: {
+    width: 104,
+    minHeight: 104,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 17,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  areaCardSelected: {
+    backgroundColor: '#208AEF',
+    borderColor: '#208AEF',
+  },
+
+  areaIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+
+  areaIconSelected: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+
+  areaText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#344054',
+  },
+
+  areaTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  scheduleCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  scheduleRow: {
+    minHeight: 78,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  scheduleRowIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  scheduleInfo: {
+    flex: 1,
+  },
+
+  scheduleTitle: {
+    fontSize: 12,
+    color: '#98A2B3',
+    fontWeight: '600',
+  },
+
+  scheduleValue: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#172033',
+    fontWeight: '700',
+  },
+
+  changeButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+
+  changeButtonText: {
+    color: '#208AEF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: '#F0F2F5',
+  },
+
+  quickDateRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+
+  quickDateButton: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  quickDateText: {
+    color: '#208AEF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  selectCard: {
+    minHeight: 70,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  selectIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  selectContent: {
+    flex: 1,
+  },
+
+  selectTitle: {
+    fontSize: 12,
+    color: '#98A2B3',
+    fontWeight: '600',
+  },
+
+  selectValue: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#172033',
+    fontWeight: '700',
+  },
+
+  priorityRow: {
+    flexDirection: 'row',
+    gap: 9,
+  },
+
+  priorityButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+
+  priorityButtonSelected: {
+    backgroundColor: '#172033',
+    borderColor: '#172033',
+  },
+
+  priorityText: {
+    color: '#667085',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  priorityTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  reminderCard: {
+    minHeight: 76,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  reminderIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  reminderContent: {
+    flex: 1,
+  },
+
+  reminderTitle: {
+    fontSize: 14,
+    color: '#172033',
+    fontWeight: '700',
+  },
+
+  reminderSubtitle: {
+    marginTop: 4,
+    color: '#667085',
+    fontSize: 12,
+  },
+
+  reminderOption: {
+    minHeight: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+    marginTop: 8,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  reminderOptionText: {
+    fontSize: 13,
+    color: '#344054',
+    fontWeight: '600',
+  },
+
+  reminderTip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#EAF4FF',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 9,
+  },
+
+  reminderTipText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 11,
+    lineHeight: 17,
+    color: '#526074',
+  },
+
+  previewCard: {
+    backgroundColor: '#172033',
+    borderRadius: 21,
+    padding: 18,
+    marginBottom: 18,
+  },
+
+  previewLabel: {
+    color: '#98A2B3',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 13,
+  },
+
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  previewIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  previewContent: {
+    flex: 1,
+  },
+
+  previewTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  previewMeta: {
+    color: '#AAB4C5',
+    fontSize: 11,
+    marginTop: 5,
+  },
+
+  saveButton: {
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: '#208AEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  saveButtonPressed: {
+    opacity: 0.85,
+  },
+
+  saveButtonDisabled: {
+    opacity: 0.65,
+  },
+
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
+  cancelButton: {
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+
+  cancelButtonText: {
+    color: '#667085',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(23,32,51,0.45)',
+    justifyContent: 'flex-end',
+  },
+
+  modalCard: {
+    backgroundColor: '#F6F8FC',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom:
+      Platform.OS === 'ios' ? 36 : 24,
+  },
+
+  modalHandle: {
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#D0D5DD',
+    alignSelf: 'center',
+    marginBottom: 18,
+  },
+
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#172033',
+  },
+
+  datePreview: {
+    alignItems: 'center',
+    backgroundColor: '#172033',
+    borderRadius: 22,
+    paddingVertical: 18,
+    marginBottom: 15,
+  },
+
+  datePreviewDay: {
+    color: '#AAB4C5',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  datePreviewNumber: {
+    color: '#FFFFFF',
+    fontSize: 42,
+    fontWeight: '800',
+    marginVertical: 2,
+  },
+
+  datePreviewMonth: {
+    color: '#D7DEEA',
+    fontSize: 13,
+  },
+
+  dateControls: {
+    height: 58,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 17,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+
+  dateArrow: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#F6F8FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  dateControlText: {
+    color: '#172033',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  todayButton: {
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: '#EAF4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+
+  todayButtonText: {
+    color: '#208AEF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  modalDoneButton: {
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+
+  modalDoneText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  timePicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 10,
+  },
+
+  timeColumn: {
+    width: 75,
+    gap: 8,
+  },
+
+  timeChoice: {
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  timeChoiceSelected: {
+    backgroundColor: '#208AEF',
+  },
+
+  timeChoiceText: {
+    color: '#344054',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  timeChoiceTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  timeSeparator: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#172033',
+  },
+
+  periodColumn: {
+    gap: 8,
+  },
+
+  periodChoice: {
+    width: 62,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  periodChoiceSelected: {
+    backgroundColor: '#172033',
+  },
+
+  periodChoiceText: {
+    color: '#344054',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  periodChoiceTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  modalOption: {
+    minHeight: 56,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  modalOptionSelected: {
+    borderColor: '#A9D5FF',
+    backgroundColor: '#EAF4FF',
+  },
+
+  modalOptionText: {
+    color: '#344054',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  modalOptionTextSelected: {
+    color: '#208AEF',
+    fontWeight: '800',
+  },
+
+  recommendedText: {
+    color: '#208AEF',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+});
+
+=============================
+FILE: src/app/login.tsx
+=============================
+import { Link, router } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+
+import { supabase } from '@/utils/supabase';
+import { signIn } from '@/services/auth';
+
+export default function LoginScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const handleLogin = async () => {
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail || !password) {
+      setErrorMessage(
+        'Please enter your email address and password.'
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      console.log('==============================');
+      console.log('LOGIN STARTED');
+      console.log('Email:', cleanEmail);
+
+      // 1. Ask Supabase to sign in
+      const result = await signIn(cleanEmail, password);
+
+      console.log('LOGIN RESPONSE');
+      console.log('User:', result.user);
+      console.log('Session:', result.session);
+
+      if (!result.user) {
+        throw new Error(
+          'Supabase did not return a user. Please check your email and password.'
+        );
+      }
+
+      if (!result.session) {
+        throw new Error(
+          'Supabase accepted the login but did not create a session. Your email may need to be confirmed.'
+        );
+      }
+
+      // 2. Verify that the session is actually stored
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      console.log('SESSION CHECK');
+      console.log('Session:', session);
+      console.log('Session error:', sessionError);
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (!session) {
+        throw new Error(
+          'Login succeeded, but the session could not be stored. Please try again.'
+        );
+      }
+
+      console.log('LOGIN SUCCESS');
+      console.log('User ID:', session.user.id);
+      console.log('Email:', session.user.email);
+      console.log('==============================');
+
+      setSuccessMessage('Login successful. Opening your tasks...');
+
+      // Give AuthProvider a moment to receive the auth event.
+      setTimeout(() => {
+        router.replace('/');
+      }, 300);
+    } catch (error) {
+      console.error('LOGIN ERROR:', error);
+
+      let message = 'Unable to sign in. Please try again.';
+
+      if (error instanceof Error) {
+        message = error.message;
+      } else if (
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error
+      ) {
+        message = String(
+          (error as { message: unknown }).message
+        );
+      }
+
+      setErrorMessage(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.logo}>
+          <Text style={styles.logoText}>✓</Text>
+        </View>
+
+        <Text style={styles.title}>Welcome back</Text>
+
+        <Text style={styles.subtitle}>
+          Stay focused, organized, and intentional with your day.
+        </Text>
+
+        {errorMessage ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorTitle}>Sign in failed</Text>
+            <Text style={styles.errorText}>
+              {errorMessage}
+            </Text>
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View style={styles.successBox}>
+            <Text style={styles.successText}>
+              {successMessage}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.form}>
+          <Text style={styles.label}>Email</Text>
+
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            placeholderTextColor="#98A2B3"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            editable={!loading}
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Password</Text>
+
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Enter your password"
+            placeholderTextColor="#98A2B3"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="password"
+            editable={!loading}
+            style={styles.input}
+          />
+
+          <Pressable
+            onPress={handleLogin}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.button,
+              pressed && styles.buttonPressed,
+              loading && styles.buttonDisabled,
+            ]}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.buttonText}>
+                Sign in
+              </Text>
+            )}
+          </Pressable>
+        </View>
+
+        <View style={styles.signupRow}>
+          <Text style={styles.signupText}>
+            Don't have an account?{' '}
+          </Text>
+
+          <Link href="/signup" asChild>
+            <Pressable disabled={loading}>
+              <Text style={styles.signupLink}>
+                Create one
+              </Text>
+            </Pressable>
+          </Link>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#F6F8FC',
+  },
+
+  container: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+
+  logo: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+
+  logoText: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '800',
+  },
+
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#172033',
+    textAlign: 'center',
+  },
+
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#667085',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 32,
+  },
+
+  errorBox: {
+    backgroundColor: '#FEF3F2',
+    borderWidth: 1,
+    borderColor: '#FDA29B',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+  },
+
+  errorTitle: {
+    color: '#B42318',
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+
+  errorText: {
+    color: '#B42318',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  successBox: {
+    backgroundColor: '#ECFDF3',
+    borderWidth: 1,
+    borderColor: '#6CE9A6',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+  },
+
+  successText: {
+    color: '#027A48',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  form: {
+    width: '100%',
+  },
+
+  label: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#172033',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+
+  input: {
+    height: 54,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#172033',
+  },
+
+  button: {
+    height: 56,
+    backgroundColor: '#208AEF',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 28,
+  },
+
+  buttonPressed: {
+    opacity: 0.85,
+  },
+
+  buttonDisabled: {
+    opacity: 0.65,
+  },
+
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  signupRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 28,
+  },
+
+  signupText: {
+    color: '#667085',
+    fontSize: 14,
+  },
+
+  signupLink: {
+    color: '#208AEF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});
+
+=============================
+FILE: src/app/signup.tsx
+=============================
+import { Link, router } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+
+import { signUp } from '@/services/auth';
+
+export default function SignupScreen() {
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSignup = async () => {
+    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+      Alert.alert(
+        'Missing information',
+        'Please complete all the fields.'
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert(
+        'Password too short',
+        'Your password must contain at least 6 characters.'
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert(
+        'Passwords do not match',
+        'Please make sure both passwords are the same.'
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const data = await signUp(
+        email.trim(),
+        password,
+        fullName.trim()
+      );
+
+      if (!data.session) {
+        Alert.alert(
+          'Check your email',
+          'Your account has been created. Please verify your email before signing in.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.replace('/login'),
+            },
+          ]
+        );
+      } else {
+        router.replace('/');
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to create your account. Please try again.';
+
+      Alert.alert('Sign up failed', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.logo}>
+          <Text style={styles.logoText}>✓</Text>
+        </View>
+
+        <Text style={styles.title}>Create your account</Text>
+
+        <Text style={styles.subtitle}>
+          Build better habits, stay organized, and make progress every day.
+        </Text>
+
+        <View style={styles.form}>
+          <Text style={styles.label}>Full name</Text>
+
+          <TextInput
+            value={fullName}
+            onChangeText={setFullName}
+            placeholder="Your full name"
+            placeholderTextColor="#98A2B3"
+            autoCapitalize="words"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Email</Text>
+
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            placeholderTextColor="#98A2B3"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Password</Text>
+
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="At least 6 characters"
+            placeholderTextColor="#98A2B3"
+            secureTextEntry
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Confirm password</Text>
+
+          <TextInput
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Repeat your password"
+            placeholderTextColor="#98A2B3"
+            secureTextEntry
+            style={styles.input}
+          />
+
+          <Pressable
+            onPress={handleSignup}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.button,
+              pressed && styles.buttonPressed,
+              loading && styles.buttonDisabled,
+            ]}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.buttonText}>Create account</Text>
+            )}
+          </Pressable>
+        </View>
+
+        <View style={styles.loginRow}>
+          <Text style={styles.loginText}>Already have an account? </Text>
+
+          <Link href="/login" asChild>
+            <Pressable>
+              <Text style={styles.loginLink}>Sign in</Text>
+            </Pressable>
+          </Link>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#F6F8FC',
+  },
+
+  container: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+
+  logo: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+
+  logoText: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '800',
+  },
+
+  title: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#172033',
+    textAlign: 'center',
+  },
+
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#667085',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 28,
+  },
+
+  form: {
+    width: '100%',
+  },
+
+  label: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#172033',
+    marginBottom: 8,
+    marginTop: 14,
+  },
+
+  input: {
+    height: 54,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#172033',
+  },
+
+  button: {
+    height: 56,
+    backgroundColor: '#208AEF',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 28,
+  },
+
+  buttonPressed: {
+    opacity: 0.85,
+  },
+
+  buttonDisabled: {
+    opacity: 0.65,
+  },
+
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  loginRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 26,
+  },
+
+  loginText: {
+    color: '#667085',
+    fontSize: 14,
+  },
+
+  loginLink: {
+    color: '#208AEF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});
+
+=============================
+FILE: src/hooks/use-auth.tsx
+=============================
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
+
+import type { Session } from '@supabase/supabase-js';
+
+import { supabase } from '@/utils/supabase';
+
+type AuthContextType = {
+  session: Session | null;
+  loading: boolean;
+};
+
+const AuthContext = createContext<AuthContextType>({
+  session: null,
+  loading: true,
+});
+
+export function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) {
+        setSession(data.session);
+        setLoading(false);
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ session, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+=============================
+FILE: src/services/auth.ts
+=============================
+
+import { supabase } from '@/utils/supabase';
+
+export async function signUp(
+  email: string,
+  password: string,
+  fullName: string
+) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+      },
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function signIn(
+  email: string,
+  password: string
+) {
+  const { data, error } =
+    await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data.session || !data.user) {
+    throw new Error(
+      'Login was not completed because no active session was created.'
+    );
+  }
+
+  return data;
+}
+
+export async function getCurrentUser() {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  return user;
+}
+
+export async function getCurrentSession() {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error) {
+    throw error;
+  }
+
+  return session;
+}
+
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    throw error;
+  }
+}
+
+
+=============================
+FILE: src/services/activities.ts
+=============================
+import { supabase } from '@/utils/supabase';
+
+/**
+ * Supported activity repeat patterns.
+ */
+export type ActivityRepeat =
+  | 'none'
+  | 'daily'
+  | 'weekdays'
+  | 'weekends'
+  | 'weekly'
+  | 'monthly'
+  | 'yearly'
+  | 'custom';
+
+/**
+ * Supported activity priorities.
+ */
+export type ActivityPriority =
+  | 'low'
+  | 'medium'
+  | 'high';
+
+/**
+ * Activity returned to the application.
+ *
+ * This keeps the existing Activity interface used by
+ * the Home and Add Activity screens, while mapping it
+ * to the real Supabase `tasks` table.
+ */
+export type Activity = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+
+  /**
+   * Category name from the categories table.
+   */
+  category: string;
+
+  /**
+   * Category UUID from the categories table.
+   */
+  category_id: string | null;
+
+  scheduled_date: string;
+  scheduled_time: string;
+
+  /**
+   * Optional ending time.
+   */
+  end_time: string | null;
+
+  repeat: ActivityRepeat | string;
+  priority: ActivityPriority | string;
+
+  reminder: boolean;
+  reminder_minutes: number | null;
+
+  completed: boolean;
+  completed_at: string | null;
+
+  carried_forward: boolean;
+  original_task_id: string | null;
+
+  created_at: string;
+  updated_at: string | null;
+
+  /**
+   * Category presentation data.
+   */
+  category_icon?: string | null;
+  category_color?: string | null;
+};
+
+/**
+ * Data required when creating an activity.
+ */
+export type CreateActivityInput = {
+  title: string;
+  description?: string;
+  category: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  end_time?: string;
+  repeat?: ActivityRepeat | string;
+  priority?: ActivityPriority | string;
+  reminder?: boolean;
+  reminder_minutes?: number;
+};
+
+/**
+ * Data that can be changed when editing an activity.
+ */
+export type UpdateActivityInput = {
+  title?: string;
+  description?: string | null;
+  category?: string;
+  scheduled_date?: string;
+  scheduled_time?: string;
+  end_time?: string | null;
+  repeat?: ActivityRepeat | string;
+  priority?: ActivityPriority | string;
+  reminder?: boolean;
+  reminder_minutes?: number | null;
+  completed?: boolean;
+};
+
+/**
+ * Raw task returned by Supabase.
+ */
+type TaskRow = {
+  id: string;
+  user_id: string;
+  category_id: string | null;
+  title: string;
+  description: string | null;
+  task_date: string;
+  start_time: string;
+  end_time: string | null;
+  priority: string;
+  recurrence: string;
+  reminder_enabled: boolean;
+  reminder_minutes: number | null;
+  completed: boolean;
+  completed_at: string | null;
+  carried_forward: boolean;
+  original_task_id: string | null;
+  created_at: string;
+  updated_at: string | null;
+
+  categories:
+    | {
+        id: string;
+        name: string;
+        icon: string | null;
+        color: string | null;
+      }
+    | null;
+};
+
+/**
+ * Make sure the user is authenticated.
+ */
+async function requireUser() {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!user) {
+    throw new Error(
+      'Your session has expired. Please log in again.'
+    );
+  }
+
+  return user;
+}
+
+/**
+ * Convert a Supabase task into the Activity shape
+ * expected by the rest of the application.
+ */
+function mapTaskToActivity(
+  task: TaskRow
+): Activity {
+  return {
+    id: task.id,
+    user_id: task.user_id,
+    title: task.title,
+    description: task.description,
+
+    category: task.categories?.name ?? 'Uncategorized',
+    category_id: task.category_id,
+
+    scheduled_date: task.task_date,
+    scheduled_time: normalizeTime(task.start_time),
+    end_time: task.end_time
+      ? normalizeTime(task.end_time)
+      : null,
+
+    repeat: task.recurrence || 'none',
+    priority: task.priority || 'medium',
+
+    reminder: task.reminder_enabled ?? false,
+    reminder_minutes: task.reminder_minutes,
+
+    completed: task.completed ?? false,
+    completed_at: task.completed_at,
+
+    carried_forward: task.carried_forward ?? false,
+    original_task_id: task.original_task_id,
+
+    created_at: task.created_at,
+    updated_at: task.updated_at,
+
+    category_icon: task.categories?.icon ?? null,
+    category_color: task.categories?.color ?? null,
+  };
+}
+
+/**
+ * PostgreSQL TIME values can sometimes arrive as
+ * HH:mm:ss. The app works more conveniently with HH:mm.
+ */
+function normalizeTime(
+  time: string
+): string {
+  if (!time) {
+    return '';
+  }
+
+  return time.substring(0, 5);
+}
+
+/**
+ * Resolve a category name to its UUID.
+ *
+ * The UI currently gives us a category name such as
+ * "Spiritual" or "Health", while tasks.category_id
+ * requires the UUID from the categories table.
+ */
+async function getCategoryId(
+  category: string,
+  userId: string
+): Promise<string> {
+  const value = category.trim();
+
+  if (!value) {
+    throw new Error(
+      'Please select a life area for this activity.'
+    );
+  }
+
+  /**
+   * If a UUID was supplied directly, use it.
+   */
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  if (uuidPattern.test(value)) {
+    return value;
+  }
+
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('user_id', userId)
+    .ilike('name', value)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error(
+      `The category "${value}" could not be found. Please select an existing life area.`
+    );
+  }
+
+  return data.id;
+}
+
+/**
+ * Validate activity information before sending it
+ * to Supabase.
+ */
+function validateActivityInput(
+  activity: CreateActivityInput
+) {
+  const title = activity.title.trim();
+
+  if (!title) {
+    throw new Error(
+      'Please enter an activity name.'
+    );
+  }
+
+  if (title.length > 200) {
+    throw new Error(
+      'Activity names cannot be longer than 200 characters.'
+    );
+  }
+
+  if (!activity.category.trim()) {
+    throw new Error(
+      'Please select a life area for this activity.'
+    );
+  }
+
+  if (!activity.scheduled_date) {
+    throw new Error(
+      'Please select a date for this activity.'
+    );
+  }
+
+  if (!activity.scheduled_time) {
+    throw new Error(
+      'Please select a time for this activity.'
+    );
+  }
+
+  if (
+    activity.reminder_minutes !== undefined &&
+    activity.reminder_minutes < 0
+  ) {
+    throw new Error(
+      'Reminder minutes cannot be negative.'
+    );
+  }
+}
+
+/**
+ * Create a new task.
+ */
+export async function createActivity(
+  activity: CreateActivityInput
+): Promise<Activity> {
+  const user = await requireUser();
+
+  validateActivityInput(activity);
+
+  const categoryId = await getCategoryId(
+    activity.category,
+    user.id
+  );
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert({
+      user_id: user.id,
+      category_id: categoryId,
+
+      title: activity.title.trim(),
+
+      description:
+        activity.description?.trim() || null,
+
+      task_date: activity.scheduled_date,
+      start_time: activity.scheduled_time,
+
+      end_time:
+        activity.end_time?.trim() || null,
+
+      priority:
+        activity.priority ?? 'medium',
+
+      recurrence:
+        activity.repeat ?? 'none',
+
+      reminder_enabled:
+        activity.reminder ?? true,
+
+      reminder_minutes:
+        activity.reminder_minutes ?? 15,
+
+      completed: false,
+      completed_at: null,
+      carried_forward: false,
+    })
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapTaskToActivity(
+    data as TaskRow
+  );
+}
+
+/**
+ * Get all tasks belonging to the current user.
+ */
+export async function fetchActivities(): Promise<
+  Activity[]
+> {
+  const user = await requireUser();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .order('task_date', {
+      ascending: true,
+    })
+    .order('start_time', {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Get one task.
+ */
+export async function fetchActivity(
+  id: string
+): Promise<Activity> {
+  const user = await requireUser();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapTaskToActivity(
+    data as TaskRow
+  );
+}
+
+/**
+ * Update a task.
+ */
+export async function updateActivity(
+  id: string,
+  updates: UpdateActivityInput
+): Promise<Activity> {
+  const user = await requireUser();
+
+  const cleanedUpdates: Record<
+    string,
+    unknown
+  > = {};
+
+  if (updates.title !== undefined) {
+    const title = updates.title.trim();
+
+    if (!title) {
+      throw new Error(
+        'Activity name cannot be empty.'
+      );
+    }
+
+    if (title.length > 200) {
+      throw new Error(
+        'Activity names cannot be longer than 200 characters.'
+      );
+    }
+
+    cleanedUpdates.title = title;
+  }
+
+  if (updates.description !== undefined) {
+    cleanedUpdates.description =
+      updates.description?.trim() || null;
+  }
+
+  if (updates.category !== undefined) {
+    cleanedUpdates.category_id =
+      await getCategoryId(
+        updates.category,
+        user.id
+      );
+  }
+
+  if (updates.scheduled_date !== undefined) {
+    cleanedUpdates.task_date =
+      updates.scheduled_date;
+  }
+
+  if (updates.scheduled_time !== undefined) {
+    cleanedUpdates.start_time =
+      updates.scheduled_time;
+  }
+
+  if (updates.end_time !== undefined) {
+    cleanedUpdates.end_time =
+      updates.end_time?.trim() || null;
+  }
+
+  if (updates.repeat !== undefined) {
+    cleanedUpdates.recurrence =
+      updates.repeat;
+  }
+
+  if (updates.priority !== undefined) {
+    cleanedUpdates.priority =
+      updates.priority;
+  }
+
+  if (updates.reminder !== undefined) {
+    cleanedUpdates.reminder_enabled =
+      updates.reminder;
+  }
+
+  if (
+    updates.reminder_minutes !== undefined
+  ) {
+    cleanedUpdates.reminder_minutes =
+      updates.reminder_minutes;
+  }
+
+  if (updates.completed !== undefined) {
+    cleanedUpdates.completed =
+      updates.completed;
+
+    cleanedUpdates.completed_at =
+      updates.completed
+        ? new Date().toISOString()
+        : null;
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .update(cleanedUpdates)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapTaskToActivity(
+    data as TaskRow
+  );
+}
+
+/**
+ * Mark a task complete or incomplete.
+ */
+export async function updateActivityCompletion(
+  id: string,
+  completed: boolean
+): Promise<Activity> {
+  const user = await requireUser();
+
+  const completedAt = completed
+    ? new Date().toISOString()
+    : null;
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .update({
+      completed,
+      completed_at: completedAt,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  /**
+   * Also record today's completion in
+   * task_completions.
+   *
+   * We intentionally don't make this fail the main
+   * task update, because the task itself has already
+   * been correctly completed.
+   */
+  if (completed) {
+    const today = getLocalDateString();
+
+    const { error: completionError } =
+      await supabase
+        .from('task_completions')
+        .upsert(
+          {
+            task_id: id,
+            user_id: user.id,
+            completed_date: today,
+            completed_at: completedAt,
+          },
+          {
+            onConflict:
+              'task_id,completed_date',
+          }
+        );
+
+    if (completionError) {
+      console.warn(
+        'Task completion history could not be recorded:',
+        completionError.message
+      );
+    }
+  }
+
+  return mapTaskToActivity(
+    data as TaskRow
+  );
+}
+
+/**
+ * Convenience method for completing a task.
+ */
+export async function completeActivity(
+  id: string
+): Promise<Activity> {
+  return updateActivityCompletion(
+    id,
+    true
+  );
+}
+
+/**
+ * Convenience method for reopening a task.
+ */
+export async function reopenActivity(
+  id: string
+): Promise<Activity> {
+  return updateActivityCompletion(
+    id,
+    false
+  );
+}
+
+/**
+ * Delete a task.
+ */
+export async function deleteActivity(
+  id: string
+): Promise<void> {
+  const user = await requireUser();
+
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get tasks for a specific date.
+ *
+ * Expected date format:
+ * YYYY-MM-DD
+ */
+export async function fetchActivitiesForDate(
+  date: string
+): Promise<Activity[]> {
+  const user = await requireUser();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('task_date', date)
+    .order('start_time', {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Get tasks between two dates.
+ */
+export async function fetchActivitiesBetweenDates(
+  startDate: string,
+  endDate: string
+): Promise<Activity[]> {
+  const user = await requireUser();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .gte('task_date', startDate)
+    .lte('task_date', endDate)
+    .order('task_date', {
+      ascending: true,
+    })
+    .order('start_time', {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Get today's tasks.
+ */
+export async function fetchTodayActivities(): Promise<
+  Activity[]
+> {
+  return fetchActivitiesForDate(
+    getLocalDateString()
+  );
+}
+
+/**
+ * Get incomplete tasks.
+ */
+export async function fetchPendingActivities(): Promise<
+  Activity[]
+> {
+  const user = await requireUser();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('completed', false)
+    .order('task_date', {
+      ascending: true,
+    })
+    .order('start_time', {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Get completed tasks.
+ */
+export async function fetchCompletedActivities(): Promise<
+  Activity[]
+> {
+  const user = await requireUser();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('completed', true)
+    .order('task_date', {
+      ascending: false,
+    })
+    .order('start_time', {
+      ascending: false,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Search tasks by title or description.
+ */
+export async function searchActivities(
+  searchTerm: string
+): Promise<Activity[]> {
+  const user = await requireUser();
+
+  const term = searchTerm.trim();
+
+  if (!term) {
+    return fetchActivities();
+  }
+
+  /**
+   * Escape PostgREST wildcard characters so a user's
+   * search text doesn't accidentally become a pattern.
+   */
+  const escapedTerm = term
+    .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_');
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .or(
+      `title.ilike.%${escapedTerm}%,description.ilike.%${escapedTerm}%`
+    )
+    .order('task_date', {
+      ascending: true,
+    })
+    .order('start_time', {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Find the next upcoming task.
+ */
+export async function fetchNextActivity(): Promise<
+  Activity | null
+> {
+  const user = await requireUser();
+
+  const today = getLocalDateString();
+  const currentTime = getLocalTimeString();
+
+  /**
+   * First look for an incomplete task later today.
+   */
+  const { data: todayData, error: todayError } =
+    await supabase
+      .from('tasks')
+      .select(`
+        *,
+        categories (
+          id,
+          name,
+          icon,
+          color
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('task_date', today)
+      .eq('completed', false)
+      .gte('start_time', currentTime)
+      .order('start_time', {
+        ascending: true,
+      })
+      .limit(1);
+
+  if (todayError) {
+    throw todayError;
+  }
+
+  if (
+    todayData &&
+    todayData.length > 0
+  ) {
+    return mapTaskToActivity(
+      todayData[0] as TaskRow
+    );
+  }
+
+  /**
+   * If there is nothing left today, find the next
+   * incomplete task on a future date.
+   */
+  const { data: futureData, error: futureError } =
+    await supabase
+      .from('tasks')
+      .select(`
+        *,
+        categories (
+          id,
+          name,
+          icon,
+          color
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('completed', false)
+      .gt('task_date', today)
+      .order('task_date', {
+        ascending: true,
+      })
+      .order('start_time', {
+        ascending: true,
+      })
+      .limit(1);
+
+  if (futureError) {
+    throw futureError;
+  }
+
+  if (
+    futureData &&
+    futureData.length > 0
+  ) {
+    return mapTaskToActivity(
+      futureData[0] as TaskRow
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Get overdue tasks.
+ */
+export async function fetchOverdueActivities(): Promise<
+  Activity[]
+> {
+  const user = await requireUser();
+
+  const today = getLocalDateString();
+  const currentTime = getLocalTimeString();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('completed', false)
+    .or(
+      `task_date.lt.${today},and(task_date.eq.${today},start_time.lt.${currentTime})`
+    )
+    .order('task_date', {
+      ascending: true,
+    })
+    .order('start_time', {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Get tasks belonging to a specific life area.
+ */
+export async function fetchActivitiesByCategory(
+  category: string
+): Promise<Activity[]> {
+  const user = await requireUser();
+
+  const categoryId = await getCategoryId(
+    category,
+    user.id
+  );
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('category_id', categoryId)
+    .order('task_date', {
+      ascending: true,
+    })
+    .order('start_time', {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Get tasks by priority.
+ */
+export async function fetchActivitiesByPriority(
+  priority: ActivityPriority
+): Promise<Activity[]> {
+  const user = await requireUser();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('priority', priority)
+    .eq('completed', false)
+    .order('task_date', {
+      ascending: true,
+    })
+    .order('start_time', {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((task) =>
+    mapTaskToActivity(task as TaskRow)
+  );
+}
+
+/**
+ * Get daily progress.
+ */
+export async function getDailyProgress(
+  date?: string
+): Promise<{
+  total: number;
+  completed: number;
+  remaining: number;
+  percentage: number;
+}> {
+  const activities =
+    await fetchActivitiesForDate(
+      date ?? getLocalDateString()
+    );
+
+  const total = activities.length;
+
+  const completed =
+    activities.filter(
+      (activity) => activity.completed
+    ).length;
+
+  const remaining =
+    total - completed;
+
+  const percentage =
+    total === 0
+      ? 0
+      : Math.round(
+          (completed / total) * 100
+        );
+
+  return {
+    total,
+    completed,
+    remaining,
+    percentage,
+  };
+}
+
+/**
+ * Calculate the number of minutes until an activity.
+ */
+export function getMinutesUntilActivity(
+  activity: Activity
+): number {
+  const activityDateTime =
+    parseLocalDateTime(
+      activity.scheduled_date,
+      activity.scheduled_time
+    );
+
+  return Math.round(
+    (activityDateTime.getTime() -
+      Date.now()) /
+      (1000 * 60)
+  );
+}
+
+/**
+ * Human-friendly status.
+ */
+export function getActivityStatus(
+  activity: Activity
+):
+  | 'completed'
+  | 'overdue'
+  | 'upcoming'
+  | 'now' {
+  if (activity.completed) {
+    return 'completed';
+  }
+
+  const minutes =
+    getMinutesUntilActivity(activity);
+
+  if (minutes < 0) {
+    return 'overdue';
+  }
+
+  if (minutes <= 1) {
+    return 'now';
+  }
+
+  return 'upcoming';
+}
+
+/**
+ * Generate a human-friendly countdown.
+ */
+export function getActivityCountdown(
+  activity: Activity
+): string {
+  if (activity.completed) {
+    return 'Completed';
+  }
+
+  const minutes =
+    getMinutesUntilActivity(activity);
+
+  if (
+    minutes <= 1 &&
+    minutes >= 0
+  ) {
+    return 'Starts now';
+  }
+
+  if (minutes < 0) {
+    const overdueMinutes =
+      Math.abs(minutes);
+
+    if (overdueMinutes < 60) {
+      return `${overdueMinutes} ${
+        overdueMinutes === 1
+          ? 'minute'
+          : 'minutes'
+      } overdue`;
+    }
+
+    const hours = Math.floor(
+      overdueMinutes / 60
+    );
+
+    return `${hours} ${
+      hours === 1
+        ? 'hour'
+        : 'hours'
+    } overdue`;
+  }
+
+  if (minutes < 60) {
+    return `Starts in ${minutes} ${
+      minutes === 1
+        ? 'minute'
+        : 'minutes'
+    }`;
+  }
+
+  const hours = Math.floor(
+    minutes / 60
+  );
+
+  if (hours < 24) {
+    return `Starts in ${hours} ${
+      hours === 1
+        ? 'hour'
+        : 'hours'
+    }`;
+  }
+
+  const days = Math.floor(
+    hours / 24
+  );
+
+  if (days === 1) {
+    return 'Starts tomorrow';
+  }
+
+  return `Starts in ${days} days`;
+}
+
+/**
+ * Parse a database date/time as local time.
+ *
+ * This avoids treating the task's local date/time
+ * as UTC.
+ */
+function parseLocalDateTime(
+  date: string,
+  time: string
+): Date {
+  const [year, month, day] =
+    date.split('-').map(Number);
+
+  const [
+    hours,
+    minutes,
+  ] = time
+    .substring(0, 5)
+    .split(':')
+    .map(Number);
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    hours,
+    minutes,
+    0,
+    0
+  );
+}
+
+/**
+ * Get the user's local date as YYYY-MM-DD.
+ */
+export function getLocalDateString(
+  date = new Date()
+): string {
+  const year =
+    date.getFullYear();
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, '0');
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get the local time as HH:mm.
+ */
+export function getLocalTimeString(
+  date = new Date()
+): string {
+  const hours = String(
+    date.getHours()
+  ).padStart(2, '0');
+
+  const minutes = String(
+    date.getMinutes()
+  ).padStart(2, '0');
+
+  return `${hours}:${minutes}`;
+}
+
+[MISSING] src/components/task-card.tsx
+
+[MISSING] src/types/index.ts
+
+[MISSING] src/types/database.ts
+
+=============================
+TASK CARD / TYPE FILES (search)
+=============================

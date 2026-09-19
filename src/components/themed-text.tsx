@@ -1,28 +1,53 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
+import {
+  Text,
+  type TextProps,
+  type TextStyle,
+} from 'react-native';
 
-import { Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import type { ThemePalette } from '@/constants/theme';
+
+export type ThemedTextVariant =
+  | 'display'
+  | 'title'
+  | 'subtitle'
+  | 'heading'
+  | 'default'
+  | 'body'
+  | 'small'
+  | 'smallBold'
+  | 'caption'
+  | 'label'
+  | 'link'
+  | 'linkPrimary'
+  | 'code';
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
-  themeColor?: ThemeColor;
+  variant?: ThemedTextVariant;
+  /** Alias kept for backward compat with existing code. */
+  type?: ThemedTextVariant;
+  color?: keyof ThemePalette;
+  /** Alias kept for backward compat. */
+  themeColor?: keyof ThemePalette;
 };
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
+export function ThemedText({
+  style,
+  variant,
+  type,
+  color,
+  themeColor,
+  ...rest
+}: ThemedTextProps) {
   const theme = useTheme();
+  const v = variant ?? type ?? 'default';
+  const c = color ?? themeColor ?? 'text';
 
   return (
     <Text
       style={[
-        { color: theme[themeColor ?? 'text'] },
-        type === 'default' && styles.default,
-        type === 'title' && styles.title,
-        type === 'small' && styles.small,
-        type === 'smallBold' && styles.smallBold,
-        type === 'subtitle' && styles.subtitle,
-        type === 'link' && styles.link,
-        type === 'linkPrimary' && styles.linkPrimary,
-        type === 'code' && styles.code,
+        { color: theme.colors[c] },
+        variantStyle(v, theme),
         style,
       ]}
       {...rest}
@@ -30,44 +55,89 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
   );
 }
 
-const styles = StyleSheet.create({
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
-  },
-  smallBold: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 700,
-  },
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
-  },
-  subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 14,
-  },
-  linkPrimary: {
-    lineHeight: 30,
-    fontSize: 14,
-    color: '#3c87f7',
-  },
-  code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
-    fontSize: 12,
-  },
-});
+function variantStyle(
+  variant: ThemedTextVariant,
+  theme: ReturnType<typeof useTheme>
+): TextStyle {
+  const { fontSize, fontWeight, lineHeight } = theme;
+
+  switch (variant) {
+    case 'display':
+      return {
+        fontSize: fontSize.display,
+        lineHeight: Math.round(fontSize.display * lineHeight.tight),
+        fontWeight: fontWeight.heavy,
+        letterSpacing: -0.6,
+      };
+    case 'title':
+      return {
+        fontSize: fontSize.xxl,
+        lineHeight: Math.round(fontSize.xxl * lineHeight.tight),
+        fontWeight: fontWeight.bold,
+        letterSpacing: -0.3,
+      };
+    case 'subtitle':
+      return {
+        fontSize: fontSize.xl,
+        lineHeight: Math.round(fontSize.xl * lineHeight.snug),
+        fontWeight: fontWeight.semibold,
+      };
+    case 'heading':
+      return {
+        fontSize: fontSize.lg,
+        lineHeight: Math.round(fontSize.lg * lineHeight.snug),
+        fontWeight: fontWeight.bold,
+      };
+    case 'default':
+    case 'body':
+      return {
+        fontSize: fontSize.base,
+        lineHeight: Math.round(fontSize.base * lineHeight.normal),
+        fontWeight: fontWeight.medium,
+      };
+    case 'small':
+      return {
+        fontSize: fontSize.sm,
+        lineHeight: Math.round(fontSize.sm * lineHeight.normal),
+        fontWeight: fontWeight.medium,
+      };
+    case 'smallBold':
+      return {
+        fontSize: fontSize.sm,
+        lineHeight: Math.round(fontSize.sm * lineHeight.normal),
+        fontWeight: fontWeight.bold,
+      };
+    case 'caption':
+      return {
+        fontSize: fontSize.xs,
+        lineHeight: Math.round(fontSize.xs * lineHeight.normal),
+        fontWeight: fontWeight.semibold,
+        letterSpacing: 0.4,
+      };
+    case 'label':
+      return {
+        fontSize: fontSize.xs,
+        lineHeight: Math.round(fontSize.xs * lineHeight.normal),
+        fontWeight: fontWeight.heavy,
+        letterSpacing: 1.2,
+        textTransform: 'uppercase',
+      };
+    case 'link':
+      return {
+        fontSize: fontSize.sm,
+        fontWeight: fontWeight.semibold,
+      };
+    case 'linkPrimary':
+      return {
+        fontSize: fontSize.sm,
+        fontWeight: fontWeight.semibold,
+        color: theme.colors.primary,
+      };
+    case 'code':
+      return {
+        fontSize: fontSize.xs,
+        fontWeight: fontWeight.bold,
+        fontFamily: 'monospace',
+      };
+  }
+}

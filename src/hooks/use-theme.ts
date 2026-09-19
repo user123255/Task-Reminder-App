@@ -1,14 +1,58 @@
-/**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
- */
+import { useMemo } from 'react';
 
-import { Colors } from '@/constants/theme';
+import {
+  Colors,
+  createShadows,
+  FontSizes,
+  FontWeights,
+  Layout,
+  LineHeights,
+  Radii,
+  Spacing,
+  type ThemePalette,
+  type ThemeScheme,
+} from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
+export type Theme = {
+  scheme: ThemeScheme;
+  colors: ThemePalette;
+  spacing: typeof Spacing;
+  radii: typeof Radii;
+  fontSize: typeof FontSizes;
+  fontWeight: typeof FontWeights;
+  lineHeight: typeof LineHeights;
+  layout: typeof Layout;
+  shadows: ReturnType<typeof createShadows>;
+};
 
-  return Colors[theme];
+/**
+ * The single source of truth for theming across the app.
+ *
+ * Usage:
+ *
+ *   const theme = useTheme();
+ *   <View style={{ backgroundColor: theme.colors.surface, padding: theme.spacing.four }} />
+ *
+ * Never hardcode hex values, spacing, or radii in screens.
+ */
+export function useTheme(): Theme {
+  const scheme = useColorScheme();
+  const resolved: ThemeScheme =
+    scheme === 'dark' ? 'dark' : 'light';
+
+  return useMemo(() => {
+    const colors = Colors[resolved];
+    return {
+      scheme: resolved,
+      colors,
+      spacing: Spacing,
+      radii: Radii,
+      fontSize: FontSizes,
+      fontWeight: FontWeights,
+      lineHeight: LineHeights,
+      layout: Layout,
+      shadows: createShadows(colors.shadow),
+    };
+  }, [resolved]);
 }
