@@ -1,5 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -12,7 +17,10 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+
+import { useAuth } from '@/hooks/use-auth';
 import { useTaskFlowSettings } from '@/hooks/use-taskflow-settings';
+
 import {
   deleteActivity,
   fetchActivities,
@@ -28,14 +36,71 @@ type FilterType =
   | 'overdue'
   | 'completed';
 
-type PriorityFilter = 'all' | 'high' | 'medium' | 'low';
+type PriorityFilter =
+  | 'all'
+  | 'high'
+  | 'medium'
+  | 'low';
 
-const BLUE = '#208AEF';
-const BACKGROUND = '#F6F8FC';
-const TEXT = '#172033';
-const MUTED = '#71809A';
-const BORDER = '#E3E9F2';
-const WHITE = '#FFFFFF';
+const COLORS = {
+  navy: '#071A2F',
+  navy2: '#0B2239',
+  navy3: '#102E4A',
+
+  orange: '#FF7A00',
+  orangeDark: '#E76500',
+  orangeSoft: '#FFF1E5',
+
+  background: '#F5F6F8',
+  white: '#FFFFFF',
+
+  text: '#172033',
+  muted: '#667085',
+  lightMuted: '#98A2B3',
+
+  border: '#E2E6EB',
+
+  success: '#15803D',
+  successSoft: '#ECFDF3',
+
+  danger: '#C62828',
+  dangerSoft: '#FFF0F0',
+
+  warning: '#B45309',
+  warningSoft: '#FFF7E8',
+};
+
+const FILTERS: {
+  key: FilterType;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  {
+    key: 'all',
+    label: 'All Tasks',
+    icon: 'grid-outline',
+  },
+  {
+    key: 'today',
+    label: 'Today',
+    icon: 'today-outline',
+  },
+  {
+    key: 'upcoming',
+    label: 'Upcoming',
+    icon: 'calendar-outline',
+  },
+  {
+    key: 'overdue',
+    label: 'Overdue',
+    icon: 'alert-circle-outline',
+  },
+  {
+    key: 'completed',
+    label: 'Completed',
+    icon: 'checkmark-circle-outline',
+  },
+];
 
 const DEFAULT_LIFE_AREAS = [
   'Spiritual',
@@ -45,126 +110,80 @@ const DEFAULT_LIFE_AREAS = [
   'Other',
 ];
 
-const FILTERS: { key: FilterType; label: string }[] = [
-  { key: 'all', label: 'All Tasks' },
-  { key: 'today', label: 'Today' },
-  { key: 'upcoming', label: 'Upcoming' },
-  { key: 'overdue', label: 'Overdue' },
-  { key: 'completed', label: 'Completed' },
-];
-
-function getTodayString() {
+function todayString() {
   const now = new Date();
 
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
-function parseActivityDate(activity: Activity) {
+function parseActivityDate(
+  activity: Activity,
+) {
   if (!activity.scheduled_date) {
     return null;
   }
 
-  const time = activity.scheduled_time || '00:00:00';
-
-  return new Date(`${activity.scheduled_date}T${time}`);
+  return new Date(
+    `${activity.scheduled_date}T${
+      activity.scheduled_time || '00:00:00'
+    }`,
+  );
 }
 
-function formatDate(dateString: string) {
+function formatDate(
+  dateString?: string | null,
+) {
   if (!dateString) {
-    return '';
+    return 'No date';
   }
 
-  const date = new Date(`${dateString}T00:00:00`);
+  const date = new Date(
+    `${dateString}T00:00:00`,
+  );
 
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return date.toLocaleDateString(
+    undefined,
+    {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    },
+  );
 }
 
-function formatTime(time?: string | null) {
-  if (!time) {
-    return '';
+function formatTime(
+  value?: string | null,
+) {
+  if (!value) {
+    return 'No time';
   }
 
-  const parts = time.split(':');
+  const parts = value.split(':');
   const hour = Number(parts[0]);
   const minute = Number(parts[1] || 0);
 
   if (Number.isNaN(hour)) {
-    return time;
+    return value;
   }
 
   const suffix = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour % 12 || 12;
 
-  return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`;
-}
-
-function getPriorityLabel(priority?: Activity['priority']) {
-  switch (priority) {
-    case 'high':
-      return 'High';
-    case 'low':
-      return 'Low';
-    default:
-      return 'Medium';
-  }
-}
-
-function getPriorityColor(priority?: Activity['priority']) {
-  switch (priority) {
-    case 'high':
-      return '#EF4444';
-    case 'low':
-      return '#22C55E';
-    default:
-      return '#F59E0B';
-  }
-}
-
-function getCategoryIcon(activity: Activity) {
-  if (activity.category_icon) {
-    return activity.category_icon;
-  }
-
-  switch (activity.category?.toLowerCase()) {
-    case 'spiritual':
-      return '🙏';
-    case 'health':
-      return '❤️';
-    case 'relationship':
-      return '🤝';
-    case 'career':
-      return '💼';
-    case 'other':
-      return '✨';
-    default:
-      return '✓';
-  }
-}
-
-function isOverdue(activity: Activity) {
-  if (activity.completed) {
-    return false;
-  }
-
-  const activityDate = parseActivityDate(activity);
-
-  if (!activityDate) {
-    return false;
-  }
-
-  return activityDate.getTime() < Date.now();
+  return `${displayHour}:${String(
+    minute,
+  ).padStart(2, '0')} ${suffix}`;
 }
 
 function isToday(activity: Activity) {
-  return activity.scheduled_date === getTodayString();
+  return (
+    activity.scheduled_date ===
+    todayString()
+  );
 }
 
 function isUpcoming(activity: Activity) {
@@ -172,7 +191,82 @@ function isUpcoming(activity: Activity) {
     return false;
   }
 
-  return activity.scheduled_date > getTodayString();
+  return (
+    Boolean(activity.scheduled_date) &&
+    activity.scheduled_date >
+      todayString()
+  );
+}
+
+function isOverdue(activity: Activity) {
+  if (activity.completed) {
+    return false;
+  }
+
+  const date = parseActivityDate(activity);
+
+  return Boolean(
+    date && date.getTime() < Date.now(),
+  );
+}
+
+function priorityColor(
+  priority?: Activity['priority'],
+) {
+  if (priority === 'high') {
+    return COLORS.danger;
+  }
+
+  if (priority === 'low') {
+    return COLORS.success;
+  }
+
+  return COLORS.orange;
+}
+
+function priorityLabel(
+  priority?: Activity['priority'],
+) {
+  if (priority === 'high') {
+    return 'High';
+  }
+
+  if (priority === 'low') {
+    return 'Low';
+  }
+
+  return 'Medium';
+}
+
+function categoryIcon(
+  activity: Activity,
+): keyof typeof Ionicons.glyphMap {
+  if (activity.category?.toLowerCase() === 'health') {
+    return 'heart-outline';
+  }
+
+  if (
+    activity.category?.toLowerCase() ===
+    'spiritual'
+  ) {
+    return 'sparkles-outline';
+  }
+
+  if (
+    activity.category?.toLowerCase() ===
+    'relationship'
+  ) {
+    return 'people-outline';
+  }
+
+  if (
+    activity.category?.toLowerCase() ===
+    'career'
+  ) {
+    return 'briefcase-outline';
+  }
+
+  return 'grid-outline';
 }
 
 function EmptyState({
@@ -182,96 +276,189 @@ function EmptyState({
   filter: FilterType;
   search: string;
 }) {
-  let title = 'No tasks yet';
-  let subtitle =
-    'Create your first task and start organizing your day.';
+  let title = 'Your task list is empty';
+  let description =
+    'Create an activity and start organizing your day.';
 
   if (search.trim()) {
     title = 'No matching tasks';
-    subtitle = 'Try a different search term.';
+    description =
+      'Try another search term.';
   } else if (filter === 'today') {
     title = 'Nothing scheduled today';
-    subtitle = 'You have no tasks scheduled for today.';
+    description =
+      'You do not have any tasks scheduled for today.';
   } else if (filter === 'upcoming') {
     title = 'No upcoming tasks';
-    subtitle = 'Your future schedule is clear.';
+    description =
+      'Your future schedule is currently clear.';
   } else if (filter === 'overdue') {
     title = 'You are all caught up';
-    subtitle = 'There are no overdue tasks.';
+    description =
+      'There are no overdue tasks.';
   } else if (filter === 'completed') {
     title = 'No completed tasks';
-    subtitle = 'Completed tasks will appear here.';
+    description =
+      'Completed activities will appear here.';
   }
 
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
-        <Text style={styles.emptyIconText}>✓</Text>
+        <Ionicons
+          name="checkmark"
+          size={29}
+          color={COLORS.orange}
+        />
       </View>
 
-      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyTitle}>
+        {title}
+      </Text>
 
-      <Text style={styles.emptySubtitle}>{subtitle}</Text>
+      <Text style={styles.emptyDescription}>
+        {description}
+      </Text>
 
-      {!search.trim() && filter !== 'completed' && (
-        <Pressable
-          style={styles.emptyButton}
-          onPress={() => router.push('/add-activity')}
-        >
-          <Text style={styles.emptyButtonText}>
-            + Create Task
-          </Text>
-        </Pressable>
-      )}
+      {!search.trim() &&
+        filter !== 'completed' && (
+          <Pressable
+            onPress={() =>
+              router.push('/add-activity')
+            }
+            style={styles.emptyButton}
+          >
+            <Ionicons
+              name="add"
+              size={17}
+              color={COLORS.white}
+            />
+
+            <Text
+              style={styles.emptyButtonText}
+            >
+              Create Task
+            </Text>
+          </Pressable>
+        )}
     </View>
+  );
+}
+
+function SidebarItem({
+  icon,
+  label,
+  active,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  active?: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.sidebarItem,
+        active &&
+          styles.sidebarItemActive,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={19}
+        color={
+          active
+            ? COLORS.orange
+            : COLORS.muted
+        }
+      />
+
+      <Text
+        style={[
+          styles.sidebarText,
+          active &&
+            styles.sidebarTextActive,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
 function TaskCard({
   activity,
+  compactMode,
   onToggle,
-  onDelete,
-  onMoveToTomorrow,
   onOpen,
+  onDelete,
+  onMove,
 }: {
   activity: Activity;
-  onToggle: (activity: Activity) => void;
-  onDelete: (activity: Activity) => void;
-  onMoveToTomorrow: (activity: Activity) => void;
-  onOpen: (activity: Activity) => void;
+  compactMode: boolean;
+  onToggle: (
+    activity: Activity,
+  ) => void;
+  onOpen: (
+    activity: Activity,
+  ) => void;
+  onDelete: (
+    activity: Activity,
+  ) => void;
+  onMove: (
+    activity: Activity,
+  ) => void;
 }) {
   const overdue = isOverdue(activity);
+  const color = priorityColor(
+    activity.priority,
+  );
 
   return (
     <View
       style={[
         styles.taskCard,
-        activity.completed && styles.taskCardCompleted,
-        overdue && styles.taskCardOverdue,
+        compactMode &&
+          styles.taskCardCompact,
+        overdue &&
+          styles.taskCardOverdue,
+        activity.completed &&
+          styles.taskCardCompleted,
       ]}
     >
       <Pressable
         onPress={() => onToggle(activity)}
         style={[
           styles.checkbox,
-          activity.completed && styles.checkboxCompleted,
+          activity.completed &&
+            styles.checkboxCompleted,
         ]}
       >
         {activity.completed && (
-          <Text style={styles.checkboxCheck}>✓</Text>
+          <Ionicons
+            name="checkmark"
+            size={15}
+            color={COLORS.white}
+          />
         )}
       </Pressable>
 
       <Pressable
-        style={styles.taskMain}
         onPress={() => onOpen(activity)}
+        style={styles.taskBody}
       >
-        <View style={styles.taskTopRow}>
+        <View style={styles.taskTitleRow}>
           <Text
             numberOfLines={2}
             style={[
               styles.taskTitle,
-              activity.completed && styles.taskTitleCompleted,
+              compactMode &&
+                styles.taskTitleCompact,
+              activity.completed &&
+                styles.completedTitle,
             ]}
           >
             {activity.title}
@@ -281,107 +468,117 @@ function TaskCard({
             style={[
               styles.priorityDot,
               {
-                backgroundColor: getPriorityColor(
-                  activity.priority,
-                ),
+                backgroundColor: color,
               },
             ]}
           />
         </View>
 
-        {activity.description ? (
-          <Text
-            numberOfLines={2}
-            style={styles.taskDescription}
-          >
-            {activity.description}
-          </Text>
-        ) : null}
-
-        <View style={styles.taskMeta}>
-          <View style={styles.metaItem}>
-            <Text style={styles.metaIcon}>
-              {getCategoryIcon(activity)}
+        {!compactMode &&
+          activity.description && (
+            <Text
+              numberOfLines={2}
+              style={styles.taskDescription}
+            >
+              {activity.description}
             </Text>
+          )}
+
+        <View
+          style={[
+            styles.metaRow,
+            compactMode &&
+              styles.metaRowCompact,
+          ]}
+        >
+          <View style={styles.metaItem}>
+            <Ionicons
+              name={categoryIcon(activity)}
+              size={14}
+              color={COLORS.orange}
+            />
 
             <Text style={styles.metaText}>
-              {activity.category || 'Other'}
+              {activity.category ||
+                'Other'}
             </Text>
           </View>
 
           <View style={styles.metaItem}>
-            <Text style={styles.metaIcon}>📅</Text>
+            <Ionicons
+              name="calendar-outline"
+              size={13}
+              color={COLORS.lightMuted}
+            />
 
             <Text style={styles.metaText}>
-              {formatDate(activity.scheduled_date)}
+              {formatDate(
+                activity.scheduled_date,
+              )}
             </Text>
           </View>
 
-          {activity.scheduled_time ? (
+          {activity.scheduled_time && (
             <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>🕐</Text>
+              <Ionicons
+                name="time-outline"
+                size={13}
+                color={COLORS.lightMuted}
+              />
 
               <Text style={styles.metaText}>
-                {formatTime(activity.scheduled_time)}
+                {formatTime(
+                  activity.scheduled_time,
+                )}
               </Text>
             </View>
-          ) : null}
-
-          {activity.repeat && activity.repeat !== 'none' ? (
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>↻</Text>
-
-              <Text style={styles.metaText}>
-                {activity.repeat}
-              </Text>
-            </View>
-          ) : null}
-
-          {activity.reminder ? (
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>🔔</Text>
-
-              <Text style={styles.metaText}>
-                {activity.reminder_minutes ?? 15} min
-              </Text>
-            </View>
-          ) : null}
+          )}
         </View>
 
-        <View style={styles.taskBottomRow}>
+        <View style={styles.badgeRow}>
           <View
             style={[
               styles.priorityBadge,
               {
-                backgroundColor: `${getPriorityColor(
-                  activity.priority,
-                )}14`,
+                backgroundColor: `${color}15`,
               },
             ]}
           >
             <Text
               style={[
-                styles.priorityBadgeText,
-                {
-                  color: getPriorityColor(activity.priority),
-                },
+                styles.priorityText,
+                { color },
               ]}
             >
-              {getPriorityLabel(activity.priority)}
+              {priorityLabel(
+                activity.priority,
+              )}
             </Text>
           </View>
 
           {overdue && (
-            <View style={styles.overdueBadge}>
-              <Text style={styles.overdueBadgeText}>
+            <View
+              style={styles.overdueBadge}
+            >
+              <Text
+                style={
+                  styles.overdueBadgeText
+                }
+              >
                 Overdue
               </Text>
             </View>
           )}
 
           {activity.carried_forward && (
-            <View style={styles.carriedBadge}>
-              <Text style={styles.carriedBadgeText}>
+            <View
+              style={styles.carriedBadge}
+            >
+              <Text
+                style={
+                  styles.carriedBadgeText
+                }
+              >
                 Carried forward
               </Text>
             </View>
@@ -392,25 +589,40 @@ function TaskCard({
       <View style={styles.taskActions}>
         {overdue && (
           <Pressable
+            onPress={() => onMove(activity)}
             style={styles.actionButton}
-            onPress={() => onMoveToTomorrow(activity)}
           >
-            <Text style={styles.moveIcon}>↷</Text>
+            <Ionicons
+              name="arrow-forward-circle-outline"
+              size={20}
+              color={COLORS.orange}
+            />
           </Pressable>
         )}
 
         <Pressable
-          style={styles.actionButton}
           onPress={() => onOpen(activity)}
+          style={styles.actionButton}
         >
-          <Text style={styles.actionIcon}>⋯</Text>
+          <Ionicons
+            name="ellipsis-horizontal"
+            size={20}
+            color={COLORS.muted}
+          />
         </Pressable>
 
         <Pressable
-          style={[styles.actionButton, styles.deleteActionButton]}
           onPress={() => onDelete(activity)}
+          style={[
+            styles.actionButton,
+            styles.deleteAction,
+          ]}
         >
-          <Text style={styles.deleteIcon}>🗑</Text>
+          <Ionicons
+            name="trash-outline"
+            size={18}
+            color={COLORS.danger}
+          />
         </Pressable>
       </View>
     </View>
@@ -418,69 +630,90 @@ function TaskCard({
 }
 
 export default function TasksScreen() {
-  const { width } = useWindowDimensions();
+  const { width } =
+    useWindowDimensions();
 
-  const isDesktop = width >= 900;
-  const isSmallMobile = width < 430;
+  const { displayName } = useAuth();
+  const { settings } =
+    useTaskFlowSettings();
 
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const compactMode =
+    settings.compactMode;
+
+  const desktop = width >= 1000;
+
+  const [activities, setActivities] =
+    useState<Activity[]>([]);
+
   const [activeFilter, setActiveFilter] =
     useState<FilterType>('all');
+
   const [priorityFilter, setPriorityFilter] =
     useState<PriorityFilter>('all');
-  const [areaFilter, setAreaFilter] = useState('All');
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const [selectedActivity, setSelectedActivity] =
+  const [areaFilter, setAreaFilter] =
+    useState('All');
+
+  const [search, setSearch] =
+    useState('');
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [selectedTask, setSelectedTask] =
     useState<Activity | null>(null);
 
-  const [trashActivity, setTrashActivity] =
+  const [deleteTask, setDeleteTask] =
     useState<Activity | null>(null);
 
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleting, setDeleting] =
+    useState(false);
 
-  const [toast, setToast] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
+  const [toast, setToast] =
+    useState<string | null>(null);
 
   const showToast = useCallback(
-    (
-      type: 'success' | 'error',
-      message: string,
-    ) => {
-      setToast({ type, message });
+    (message: string) => {
+      setToast(message);
 
       setTimeout(() => {
         setToast(null);
-      }, 3000);
+      }, 2800);
     },
     [],
   );
 
-  const loadTasks = useCallback(async () => {
-    try {
-      setError(null);
+  const loadTasks =
+    useCallback(async () => {
+      try {
+        setError(null);
 
-      const data = await fetchActivities();
+        const data =
+          await fetchActivities();
 
-      setActivities(data);
-    } catch (err) {
-      console.error('Failed to load tasks:', err);
+        setActivities(data);
+      } catch (err) {
+        console.error(
+          'Failed to load tasks:',
+          err,
+        );
 
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to load your tasks.',
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to load your tasks.',
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -488,135 +721,180 @@ export default function TasksScreen() {
     }, [loadTasks]),
   );
 
-  const onRefresh = async () => {
+  const refresh = async () => {
     setRefreshing(true);
     await loadTasks();
   };
 
   const lifeAreas = useMemo(() => {
-    const categories = activities
-      .map((activity) => activity.category?.trim())
-      .filter(Boolean) as string[];
+    const values =
+      activities
+        .map(
+          (activity) =>
+            activity.category?.trim(),
+        )
+        .filter(Boolean) as string[];
 
     const unique = Array.from(
-      new Set(
-        categories.map(
-          (category) =>
-            category.charAt(0).toUpperCase() +
-            category.slice(1),
-        ),
-      ),
+      new Set(values),
     );
 
-    const ordered = DEFAULT_LIFE_AREAS.filter((area) =>
-      unique.some(
-        (item) => item.toLowerCase() === area.toLowerCase(),
-      ),
-    );
+    const ordered =
+      DEFAULT_LIFE_AREAS.filter(
+        (area) =>
+          unique.some(
+            (item) =>
+              item.toLowerCase() ===
+              area.toLowerCase(),
+          ),
+      );
 
     const custom = unique.filter(
       (item) =>
         !DEFAULT_LIFE_AREAS.some(
           (area) =>
-            area.toLowerCase() === item.toLowerCase(),
+            area.toLowerCase() ===
+            item.toLowerCase(),
         ),
     );
 
-    return ['All', ...ordered, ...custom];
+    return [
+      'All',
+      ...ordered,
+      ...custom,
+    ];
   }, [activities]);
 
-  const filteredActivities = useMemo(() => {
-    let result = [...activities];
-
-    if (activeFilter === 'today') {
-      result = result.filter(isToday);
-    }
-
-    if (activeFilter === 'upcoming') {
-      result = result.filter(isUpcoming);
-    }
-
-    if (activeFilter === 'overdue') {
-      result = result.filter(isOverdue);
-    }
-
-    if (activeFilter === 'completed') {
-      result = result.filter(
-        (activity) => activity.completed,
-      );
-    }
-
-    if (priorityFilter !== 'all') {
-      result = result.filter(
-        (activity) => activity.priority === priorityFilter,
-      );
-    }
-
-    if (areaFilter !== 'All') {
-      result = result.filter(
-        (activity) =>
-          activity.category?.toLowerCase() ===
-          areaFilter.toLowerCase(),
-      );
-    }
-
-    if (search.trim()) {
-      const query = search.trim().toLowerCase();
-
-      result = result.filter((activity) => {
-        return (
-          activity.title.toLowerCase().includes(query) ||
-          activity.description
-            ?.toLowerCase()
-            .includes(query) ||
-          activity.category
-            ?.toLowerCase()
-            .includes(query)
-        );
-      });
-    }
-
-    result.sort((a, b) => {
-      const aDate =
-        parseActivityDate(a)?.getTime() ?? 0;
-
-      const bDate =
-        parseActivityDate(b)?.getTime() ?? 0;
-
-      return aDate - bDate;
-    });
-
-    return result;
-  }, [
-    activities,
-    activeFilter,
-    priorityFilter,
-    areaFilter,
-    search,
-  ]);
-
-  const counts = useMemo(() => {
-    return {
+  const counts = useMemo(
+    () => ({
       all: activities.length,
-      today: activities.filter(isToday).length,
-      upcoming: activities.filter(isUpcoming).length,
-      overdue: activities.filter(isOverdue).length,
-      completed: activities.filter(
-        (activity) => activity.completed,
+      today: activities.filter(
+        isToday,
       ).length,
-    };
-  }, [activities]);
+      upcoming: activities.filter(
+        isUpcoming,
+      ).length,
+      overdue: activities.filter(
+        isOverdue,
+      ).length,
+      completed: activities.filter(
+        (activity) =>
+          activity.completed,
+      ).length,
+    }),
+    [activities],
+  );
 
-  const handleToggle = async (activity: Activity) => {
-    const newCompletedState = !activity.completed;
+  const filteredActivities =
+    useMemo(() => {
+      let result = [...activities];
+
+      if (activeFilter === 'today') {
+        result = result.filter(
+          isToday,
+        );
+      }
+
+      if (
+        activeFilter === 'upcoming'
+      ) {
+        result = result.filter(
+          isUpcoming,
+        );
+      }
+
+      if (
+        activeFilter === 'overdue'
+      ) {
+        result = result.filter(
+          isOverdue,
+        );
+      }
+
+      if (
+        activeFilter === 'completed'
+      ) {
+        result = result.filter(
+          (activity) =>
+            activity.completed,
+        );
+      }
+
+      if (
+        priorityFilter !== 'all'
+      ) {
+        result = result.filter(
+          (activity) =>
+            activity.priority ===
+            priorityFilter,
+        );
+      }
+
+      if (areaFilter !== 'All') {
+        result = result.filter(
+          (activity) =>
+            activity.category
+              ?.toLowerCase() ===
+            areaFilter.toLowerCase(),
+        );
+      }
+
+      if (search.trim()) {
+        const query =
+          search
+            .trim()
+            .toLowerCase();
+
+        result = result.filter(
+          (activity) =>
+            activity.title
+              .toLowerCase()
+              .includes(query) ||
+            activity.description
+              ?.toLowerCase()
+              .includes(query) ||
+            activity.category
+              ?.toLowerCase()
+              .includes(query),
+        );
+      }
+
+      result.sort((a, b) => {
+        const aDate =
+          parseActivityDate(
+            a,
+          )?.getTime() ?? 0;
+
+        const bDate =
+          parseActivityDate(
+            b,
+          )?.getTime() ?? 0;
+
+        return aDate - bDate;
+      });
+
+      return result;
+    }, [
+      activities,
+      activeFilter,
+      priorityFilter,
+      areaFilter,
+      search,
+    ]);
+
+  const toggleTask = async (
+    activity: Activity,
+  ) => {
+    const completed =
+      !activity.completed;
 
     setActivities((current) =>
       current.map((item) =>
         item.id === activity.id
           ? {
               ...item,
-              completed: newCompletedState,
-              completed_at: newCompletedState
+              completed,
+              completed_at: completed
                 ? new Date().toISOString()
                 : null,
             }
@@ -624,144 +902,99 @@ export default function TasksScreen() {
       ),
     );
 
-    setSelectedActivity((current) =>
-      current?.id === activity.id
-        ? {
-            ...current,
-            completed: newCompletedState,
-            completed_at: newCompletedState
-              ? new Date().toISOString()
-              : null,
-          }
-        : current,
-    );
-
     try {
       await updateActivityCompletion(
         activity.id,
-        newCompletedState,
+        completed,
       );
 
       showToast(
-        'success',
-        newCompletedState
-          ? 'Task completed ✓'
+        completed
+          ? 'Task completed'
           : 'Task reopened',
       );
     } catch (err) {
-      console.error('Failed to update task:', err);
+      console.error(err);
 
       setActivities((current) =>
         current.map((item) =>
-          item.id === activity.id ? activity : item,
+          item.id === activity.id
+            ? activity
+            : item,
         ),
       );
 
-      setSelectedActivity((current) =>
-        current?.id === activity.id
-          ? activity
-          : current,
-      );
-
       showToast(
-        'error',
-        'Could not update the task. Please try again.',
+        'Could not update the task',
       );
     }
   };
 
-  const handleDelete = (activity: Activity) => {
-    setSelectedActivity(null);
-    setTrashActivity(activity);
-  };
-
-  const confirmDelete = async () => {
-    if (!trashActivity || isDeleting) {
-      return;
-    }
-
-    const activity = trashActivity;
-
+  const moveTask = async (
+    activity: Activity,
+  ) => {
     try {
-      setIsDeleting(true);
-
-      await deleteActivity(activity.id);
-
-      setActivities((current) =>
-        current.filter(
-          (item) => item.id !== activity.id,
-        ),
+      await moveActivityToTomorrow(
+        activity.id,
       );
-
-      setSelectedActivity(null);
-      setTrashActivity(null);
-
-      showToast(
-        'success',
-        `"${activity.title}" moved to Trash`,
-      );
-    } catch (err) {
-      console.error(
-        'Failed to move task to trash:',
-        err,
-      );
-
-      showToast(
-        'error',
-        'Could not move the task to Trash. Please try again.',
-      );
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleMoveToTomorrow = (activity: Activity) => {
-    setSelectedActivity(null);
-
-    moveToTomorrow(activity);
-  };
-
-  const moveToTomorrow = async (activity: Activity) => {
-    try {
-      await moveActivityToTomorrow(activity.id);
 
       await loadTasks();
 
       showToast(
-        'success',
-        `"${activity.title}" moved to tomorrow`,
+        'Task moved to tomorrow',
       );
     } catch (err) {
-      console.error(
-        'Failed to move task:',
-        err,
-      );
-
       showToast(
-        'error',
         err instanceof Error
           ? err.message
-          : 'Could not move the task. Please try again.',
+          : 'Could not move task',
       );
     }
   };
 
-  const openActivity = (activity: Activity) => {
-    setSelectedActivity(activity);
-  };
-
-  const closeActivity = () => {
-    setSelectedActivity(null);
-  };
-
-  const editActivity = () => {
-    if (!selectedActivity) {
+  const confirmDelete = async () => {
+    if (!deleteTask || deleting) {
       return;
     }
 
-    const id = selectedActivity.id;
+    try {
+      setDeleting(true);
 
-    setSelectedActivity(null);
+      await deleteActivity(
+        deleteTask.id,
+      );
+
+      setActivities((current) =>
+        current.filter(
+          (item) =>
+            item.id !== deleteTask.id,
+        ),
+      );
+
+      setDeleteTask(null);
+
+      showToast(
+        'Task moved to Trash',
+      );
+    } catch (err) {
+      console.error(err);
+
+      showToast(
+        'Could not move task to Trash',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const editTask = () => {
+    if (!selectedTask) {
+      return;
+    }
+
+    const id = selectedTask.id;
+
+    setSelectedTask(null);
 
     router.push({
       pathname: '/add-activity',
@@ -773,14 +1006,18 @@ export default function TasksScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingScreen}>
+      <View style={styles.loading}>
         <View style={styles.loadingLogo}>
-          <Text style={styles.loadingLogoText}>✓</Text>
+          <Ionicons
+            name="checkmark"
+            size={27}
+            color={COLORS.white}
+          />
         </View>
 
         <ActivityIndicator
-          size="large"
-          color={BLUE}
+          size="small"
+          color={COLORS.orange}
         />
 
         <Text style={styles.loadingText}>
@@ -792,138 +1029,134 @@ export default function TasksScreen() {
 
   return (
     <View style={styles.screen}>
-      {isDesktop && (
+      {desktop && (
         <View style={styles.sidebar}>
-          <View style={styles.logoRow}>
-            <View style={styles.logo}>
-              <Text style={styles.logoCheck}>✓</Text>
+          <View style={styles.brand}>
+            <View style={styles.brandLogo}>
+              <Ionicons
+                name="checkmark"
+                size={21}
+                color={COLORS.white}
+              />
             </View>
 
-            <Text style={styles.logoText}>
+            <Text style={styles.brandText}>
               TaskFlow
             </Text>
           </View>
 
-          <Text style={styles.workspaceLabel}>
+          <Text
+            style={styles.workspaceLabel}
+          >
             WORKSPACE
           </Text>
 
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.replace('/')}
+          <SidebarItem
+            icon="home-outline"
+            label="Home"
+            onPress={() =>
+              router.replace('/')
+            }
+          />
+
+          <SidebarItem
+            icon="checkmark-circle-outline"
+            label="Tasks"
+            active
+          />
+
+          <SidebarItem
+            icon="calendar-outline"
+            label="Calendar"
+            onPress={() =>
+              router.push('/calendar')
+            }
+          />
+
+          <SidebarItem
+            icon="library-outline"
+            label="Library"
+            onPress={() =>
+              router.push('/library')
+            }
+          />
+
+          <SidebarItem
+            icon="bar-chart-outline"
+            label="Reports"
+            onPress={() =>
+              router.push('/reports')
+            }
+          />
+
+          <SidebarItem
+            icon="sparkles-outline"
+            label="AI Assist"
+            onPress={() =>
+              router.push('/ai-assist')
+            }
+          />
+
+          <SidebarItem
+            icon="videocam-outline"
+            label="Meetings"
+            onPress={() =>
+              router.push('/meetings')
+            }
+          />
+
+          <View
+            style={styles.sidebarSpacer}
+          />
+
+          <SidebarItem
+            icon="trash-outline"
+            label="Trash"
+            onPress={() =>
+              router.push('/trash')
+            }
+          />
+
+          <SidebarItem
+            icon="help-circle-outline"
+            label="Help"
+            onPress={() =>
+              router.push('/help')
+            }
+          />
+
+          <SidebarItem
+            icon="settings-outline"
+            label="Settings"
+            onPress={() =>
+              router.push('/settings')
+            }
+          />
+
+          <View
+            style={styles.profile}
           >
-            <Text style={styles.sideIcon}>⌂</Text>
-            <Text style={styles.sideText}>Home</Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.sideItem,
-              styles.sideItemActive,
-            ]}
-          >
-            <Text style={styles.sideIconActive}>
-              ✓
-            </Text>
-
-            <Text style={styles.sideTextActive}>
-              Tasks
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.push('/calendar')}
-          >
-            <Text style={styles.sideIcon}>▣</Text>
-            <Text style={styles.sideText}>
-              Calendar
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.push('/library')}
-          >
-            <Text style={styles.sideIcon}>▤</Text>
-            <Text style={styles.sideText}>
-              Library
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.push('/reports')}
-          >
-            <Text style={styles.sideIcon}>▥</Text>
-            <Text style={styles.sideText}>
-              Reports
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.push('/ai-assist')}
-          >
-            <Text style={styles.sideIcon}>✦</Text>
-            <Text style={styles.sideText}>
-              AI Assist
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.push('/meetings')}
-          >
-            <Text style={styles.sideIcon}>□</Text>
-            <Text style={styles.sideText}>
-              Meetings
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.push('/trash')}
-          >
-            <Text style={styles.sideIcon}>♜</Text>
-            <Text style={styles.sideText}>
-              Trash
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.push('/help')}
-          >
-            <Text style={styles.sideIcon}>?</Text>
-            <Text style={styles.sideText}>
-              Help
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sideItem}
-            onPress={() => router.push('/settings')}
-          >
-            <Text style={styles.sideIcon}>⚙</Text>
-            <Text style={styles.sideText}>
-              Settings
-            </Text>
-          </Pressable>
-
-          <View style={styles.profileBottom}>
-            <View style={styles.profileAvatar}>
-              <Text style={styles.profileAvatarText}>
-                N
+            <View style={styles.avatar}>
+              <Text
+                style={styles.avatarText}
+              >
+                {(displayName ||
+                  'N')
+                  .charAt(0)
+                  .toUpperCase()}
               </Text>
             </View>
 
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>
-                Nyayath
+            <View>
+              <Text
+                style={styles.profileName}
+              >
+                {displayName || 'Nyayath'}
               </Text>
 
-              <Text style={styles.profileSubtitle}>
+              <Text
+                style={styles.profileCaption}
+              >
                 Personal workspace
               </Text>
             </View>
@@ -931,686 +1164,958 @@ export default function TasksScreen() {
         </View>
       )}
 
-      <View style={styles.content}>
+      <View style={styles.main}>
         <View
           style={[
-            styles.topBar,
-            !isDesktop && styles.mobileTopBar,
+            styles.topbar,
+            !desktop &&
+              styles.mobileTopbar,
           ]}
         >
-          {!isDesktop && (
+          {!desktop && (
             <Pressable
-              onPress={() => router.replace('/')}
+              onPress={() =>
+                router.replace('/')
+              }
               style={styles.mobileBrand}
             >
-              <View style={styles.smallLogo}>
-                <Text style={styles.logoCheck}>
-                  ✓
-                </Text>
+              <View
+                style={styles.mobileLogo}
+              >
+                <Ionicons
+                  name="checkmark"
+                  size={18}
+                  color={COLORS.white}
+                />
               </View>
 
-              {!isSmallMobile && (
-                <Text style={styles.mobileBrandText}>
-                  TaskFlow
-                </Text>
-              )}
+              <Text
+                style={
+                  styles.mobileBrandText
+                }
+              >
+                TaskFlow
+              </Text>
             </Pressable>
           )}
 
           <View
             style={[
-              styles.searchBox,
-              !isDesktop && styles.mobileSearchBox,
+              styles.search,
+              !desktop &&
+                styles.mobileSearch,
             ]}
           >
-            <Text style={styles.searchIcon}>⌕</Text>
+            <Ionicons
+              name="search-outline"
+              size={18}
+              color={COLORS.muted}
+            />
 
             <TextInput
               value={search}
               onChangeText={setSearch}
               placeholder="Search tasks..."
-              placeholderTextColor="#91A0B7"
+              placeholderTextColor={
+                COLORS.lightMuted
+              }
               style={styles.searchInput}
-              returnKeyType="search"
             />
 
             {search.length > 0 && (
               <Pressable
-                onPress={() => setSearch('')}
+                onPress={() =>
+                  setSearch('')
+                }
               >
-                <Text style={styles.clearSearch}>
-                  ×
-                </Text>
+                <Ionicons
+                  name="close-circle"
+                  size={18}
+                  color={COLORS.lightMuted}
+                />
               </Pressable>
             )}
           </View>
 
-          <View style={styles.topActions}>
+          <View
+            style={styles.topActions}
+          >
             <Pressable
-              style={styles.iconButton}
               onPress={() =>
-                showToast(
-                  counts.overdue > 0
-                    ? 'error'
-                    : 'success',
-                  counts.overdue > 0
-                    ? `You have ${counts.overdue} overdue ${
-                        counts.overdue === 1
-                          ? 'task'
-                          : 'tasks'
-                      }.`
-                    : 'You are all caught up.',
-                )
+                router.push('/ai-assist')
               }
+              style={styles.aiButton}
             >
-              <Text style={styles.topIcon}>♧</Text>
+              <Ionicons
+                name="sparkles"
+                size={16}
+                color={COLORS.white}
+              />
 
-              {counts.overdue > 0 && (
-                <View style={styles.notificationDot}>
-                  <Text style={styles.notificationDotText}>
-                    {counts.overdue > 9
-                      ? '9+'
-                      : counts.overdue}
-                  </Text>
-                </View>
+              {desktop && (
+                <Text
+                  style={styles.aiText}
+                >
+                  AI Assist
+                </Text>
               )}
             </Pressable>
 
-            {isDesktop && (
-              <Pressable
-                style={styles.aiButton}
-                onPress={() =>
-                  router.push('/ai-assist')
-                }
-              >
-                <Text style={styles.aiButtonText}>
-                  ✦ AI
-                </Text>
-              </Pressable>
-            )}
-
             <Pressable
-              style={styles.avatarButton}
               onPress={() =>
                 router.push('/settings')
               }
+              style={styles.avatarButton}
             >
-              <Text style={styles.avatarButtonText}>
-                N
+              <Text
+                style={
+                  styles.avatarButtonText
+                }
+              >
+                {(displayName ||
+                  'N')
+                  .charAt(0)
+                  .toUpperCase()}
               </Text>
             </Pressable>
           </View>
         </View>
 
         <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={
-            styles.scrollContent
+          showsVerticalScrollIndicator={
+            false
           }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={BLUE}
+              onRefresh={refresh}
+              tintColor={
+                COLORS.orange
+              }
             />
           }
+          contentContainerStyle={
+            styles.content
+          }
         >
-          <View
-            style={[
-              styles.pageHeader,
-              !isDesktop && styles.mobilePageHeader,
-            ]}
-          >
-            <View style={styles.pageHeaderText}>
-              <Text style={styles.pageTitle}>
+          {/* PAGE HERO */}
+
+          <View style={styles.pageHero}>
+            <View style={styles.heroText}>
+              <View
+                style={styles.orangeLine}
+              />
+
+              <Text
+                style={styles.heroEyebrow}
+              >
+                YOUR WORKSPACE
+              </Text>
+
+              <Text
+                style={styles.pageTitle}
+              >
                 Tasks
               </Text>
 
-              <Text style={styles.pageSubtitle}>
-                Organize, manage, and complete your
-                activities.
+              <Text
+                style={styles.pageSubtitle}
+              >
+                Organize your activities,
+                manage priorities, and
+                keep your day moving.
               </Text>
             </View>
 
             <Pressable
-              style={styles.newTaskButton}
               onPress={() =>
-                router.push('/add-activity')
+                router.push(
+                  '/add-activity',
+                )
               }
+              style={styles.newTaskButton}
             >
+              <Ionicons
+                name="add"
+                size={19}
+                color={COLORS.white}
+              />
+
               <Text
-                style={styles.newTaskButtonText}
+                style={
+                  styles.newTaskText
+                }
               >
-                + New Task
+                New Task
               </Text>
             </Pressable>
           </View>
 
           {error && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorTitle}>
-                Couldn't load tasks
-              </Text>
+            <View
+              style={styles.errorBox}
+            >
+              <Ionicons
+                name="alert-circle-outline"
+                size={20}
+                color={COLORS.danger}
+              />
 
-              <Text style={styles.errorText}>
-                {error}
-              </Text>
-
-              <Pressable
-                style={styles.retryButton}
-                onPress={loadTasks}
+              <View
+                style={styles.errorBody}
               >
                 <Text
-                  style={styles.retryButtonText}
+                  style={
+                    styles.errorTitle
+                  }
                 >
-                  Try Again
+                  Couldn't load tasks
+                </Text>
+
+                <Text
+                  style={
+                    styles.errorText
+                  }
+                >
+                  {error}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={loadTasks}
+                style={
+                  styles.retryButton
+                }
+              >
+                <Text
+                  style={
+                    styles.retryText
+                  }
+                >
+                  Retry
                 </Text>
               </Pressable>
             </View>
           )}
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.statsRow}
+          {/* STATISTICS */}
+
+          <View
+            style={styles.statsGrid}
           >
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>
-                All Tasks
-              </Text>
+            <Stat
+              icon="grid-outline"
+              label="All Tasks"
+              value={counts.all}
+            />
 
-              <Text style={styles.statNumber}>
-                {counts.all}
-              </Text>
+            <Stat
+              icon="today-outline"
+              label="Today"
+              value={counts.today}
+              orange
+            />
+
+            <Stat
+              icon="calendar-outline"
+              label="Upcoming"
+              value={counts.upcoming}
+            />
+
+            <Stat
+              icon="alert-circle-outline"
+              label="Overdue"
+              value={counts.overdue}
+              danger={
+                counts.overdue > 0
+              }
+            />
+
+            <Stat
+              icon="checkmark-circle-outline"
+              label="Completed"
+              value={counts.completed}
+              success
+            />
+          </View>
+
+          {/* FILTERS */}
+
+          <View
+            style={styles.filterCard}
+          >
+            <View
+              style={
+                styles.filterHeader
+              }
+            >
+              <View>
+                <View
+                  style={
+                    styles.sectionLabel
+                  }
+                >
+                  <View
+                    style={
+                      styles.sectionLabelLine
+                    }
+                  />
+
+                  <Text
+                    style={
+                      styles.sectionLabelText
+                    }
+                  >
+                    ORGANIZE
+                  </Text>
+                </View>
+
+                <Text
+                  style={
+                    styles.filterTitle
+                  }
+                >
+                  Find what you need
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>
-                Today
-              </Text>
-
-              <Text style={styles.statNumber}>
-                {counts.today}
-              </Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>
-                Upcoming
-              </Text>
-
-              <Text style={styles.statNumber}>
-                {counts.upcoming}
-              </Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>
-                Overdue
-              </Text>
-
-              <Text
-                style={[
-                  styles.statNumber,
-                  counts.overdue > 0 &&
-                    styles.overdueNumber,
-                ]}
-              >
-                {counts.overdue}
-              </Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>
-                Completed
-              </Text>
-
-              <Text style={styles.statNumber}>
-                {counts.completed}
-              </Text>
-            </View>
-          </ScrollView>
-
-          <View style={styles.filterSection}>
             <ScrollView
               horizontal
-              showsHorizontalScrollIndicator={false}
+              showsHorizontalScrollIndicator={
+                false
+              }
               contentContainerStyle={
                 styles.filterScroll
               }
             >
-              {FILTERS.map((filter) => {
-                const active =
-                  activeFilter === filter.key;
+              {FILTERS.map(
+                (filter) => {
+                  const active =
+                    activeFilter ===
+                    filter.key;
 
-                return (
-                  <Pressable
-                    key={filter.key}
-                    onPress={() =>
-                      setActiveFilter(
-                        filter.key,
-                      )
-                    }
-                    style={[
-                      styles.filterButton,
-                      active &&
-                        styles.filterButtonActive,
-                    ]}
-                  >
-                    <Text
+                  return (
+                    <Pressable
+                      key={
+                        filter.key
+                      }
+                      onPress={() =>
+                        setActiveFilter(
+                          filter.key,
+                        )
+                      }
                       style={[
-                        styles.filterText,
+                        styles.filterButton,
                         active &&
-                          styles.filterTextActive,
+                          styles.filterButtonActive,
                       ]}
                     >
-                      {filter.label}
-                    </Text>
+                      <Ionicons
+                        name={
+                          filter.icon
+                        }
+                        size={16}
+                        color={
+                          active
+                            ? COLORS.white
+                            : COLORS.muted
+                        }
+                      />
 
-                    <View
-                      style={[
-                        styles.filterCount,
-                        active &&
-                          styles.filterCountActive,
-                      ]}
-                    >
                       <Text
                         style={[
-                          styles.filterCountText,
+                          styles.filterButtonText,
                           active &&
-                            styles.filterCountTextActive,
+                            styles.filterButtonTextActive,
                         ]}
                       >
-                        {counts[filter.key]}
+                        {
+                          filter.label
+                        }
                       </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
 
-          <View style={styles.filterPanel}>
-            <View style={styles.filterGroup}>
+                      <View
+                        style={[
+                          styles.filterCount,
+                          active &&
+                            styles.filterCountActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.filterCountText,
+                            active &&
+                              styles.filterCountTextActive,
+                          ]}
+                        >
+                          {
+                            counts[
+                              filter.key
+                            ]
+                          }
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                },
+              )}
+            </ScrollView>
+
+            <View
+              style={styles.filterDivider}
+            />
+
+            <View
+              style={styles.filterGroup}
+            >
               <Text
-                style={styles.filterGroupLabel}
+                style={
+                  styles.filterGroupTitle
+                }
               >
                 Priority
               </Text>
 
               <ScrollView
                 horizontal
-                showsHorizontalScrollIndicator={false}
+                showsHorizontalScrollIndicator={
+                  false
+                }
               >
                 {(
                   [
-                    ['all', 'All'],
-                    ['high', 'High'],
-                    ['medium', 'Medium'],
-                    ['low', 'Low'],
+                    [
+                      'all',
+                      'All',
+                    ],
+                    [
+                      'high',
+                      'High',
+                    ],
+                    [
+                      'medium',
+                      'Medium',
+                    ],
+                    [
+                      'low',
+                      'Low',
+                    ],
                   ] as [
                     PriorityFilter,
                     string,
                   ][]
-                ).map(([key, label]) => {
-                  const active =
-                    priorityFilter === key;
+                ).map(
+                  ([key, label]) => {
+                    const active =
+                      priorityFilter ===
+                      key;
 
-                  return (
-                    <Pressable
-                      key={key}
-                      onPress={() =>
-                        setPriorityFilter(
-                          key,
-                        )
-                      }
-                      style={[
-                        styles.smallFilter,
-                        active &&
-                          styles.smallFilterActive,
-                      ]}
-                    >
-                      <Text
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() =>
+                          setPriorityFilter(
+                            key,
+                          )
+                        }
                         style={[
-                          styles.smallFilterText,
+                          styles.smallFilter,
                           active &&
-                            styles.smallFilterTextActive,
+                            styles.smallFilterActive,
                         ]}
                       >
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                        {key !==
+                          'all' && (
+                          <View
+                            style={[
+                              styles.prioritySmallDot,
+                              {
+                                backgroundColor:
+                                  priorityColor(
+                                    key as Activity['priority'],
+                                  ),
+                              },
+                            ]}
+                          />
+                        )}
+
+                        <Text
+                          style={[
+                            styles.smallFilterText,
+                            active &&
+                              styles.smallFilterTextActive,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  },
+                )}
               </ScrollView>
             </View>
 
-            <View style={styles.filterGroup}>
+            <View
+              style={styles.filterGroup}
+            >
               <Text
-                style={styles.filterGroupLabel}
+                style={
+                  styles.filterGroupTitle
+                }
               >
                 Life Area
               </Text>
 
               <ScrollView
                 horizontal
-                showsHorizontalScrollIndicator={false}
+                showsHorizontalScrollIndicator={
+                  false
+                }
               >
-                {lifeAreas.map((area) => {
-                  const active =
-                    areaFilter === area;
+                {lifeAreas.map(
+                  (area) => {
+                    const active =
+                      areaFilter ===
+                      area;
 
-                  return (
-                    <Pressable
-                      key={area}
-                      onPress={() =>
-                        setAreaFilter(area)
-                      }
-                      style={[
-                        styles.smallFilter,
-                        active &&
-                          styles.smallFilterActive,
-                      ]}
-                    >
-                      <Text
+                    return (
+                      <Pressable
+                        key={area}
+                        onPress={() =>
+                          setAreaFilter(
+                            area,
+                          )
+                        }
                         style={[
-                          styles.smallFilterText,
+                          styles.smallFilter,
                           active &&
-                            styles.smallFilterTextActive,
+                            styles.smallFilterActive,
                         ]}
                       >
-                        {area}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                        <Text
+                          style={[
+                            styles.smallFilterText,
+                            active &&
+                              styles.smallFilterTextActive,
+                          ]}
+                        >
+                          {area}
+                        </Text>
+                      </Pressable>
+                    );
+                  },
+                )}
               </ScrollView>
             </View>
           </View>
 
-          <View style={styles.resultsHeader}>
+          {/* RESULTS */}
+
+          <View
+            style={styles.resultsHeader}
+          >
             <View>
-              <Text style={styles.resultsTitle}>
-                {activeFilter === 'all'
-                  ? 'All Tasks'
-                  : FILTERS.find(
-                      (item) =>
-                        item.key ===
-                        activeFilter,
-                    )?.label}
+              <View
+                style={
+                  styles.sectionLabel
+                }
+              >
+                <View
+                  style={
+                    styles.sectionLabelLine
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.sectionLabelText
+                  }
+                >
+                  ACTIVITIES
+                </Text>
+              </View>
+
+              <Text
+                style={styles.resultsTitle}
+              >
+                {FILTERS.find(
+                  (item) =>
+                    item.key ===
+                    activeFilter,
+                )?.label ||
+                  'All Tasks'}
               </Text>
 
-              <Text style={styles.resultsSubtitle}>
+              <Text
+                style={
+                  styles.resultsSubtitle
+                }
+              >
                 {filteredActivities.length}{' '}
-                {filteredActivities.length === 1
+                {filteredActivities.length ===
+                1
                   ? 'task'
                   : 'tasks'}
-                {search
+                {search.trim()
                   ? ` matching "${search}"`
                   : ''}
               </Text>
             </View>
 
             <Pressable
-              onPress={onRefresh}
-              style={styles.refreshButton}
+              onPress={refresh}
+              style={
+                styles.refreshButton
+              }
             >
-              <Text style={styles.refreshText}>
-                ↻ Refresh
+              <Ionicons
+                name="refresh-outline"
+                size={16}
+                color={COLORS.navy}
+              />
+
+              <Text
+                style={
+                  styles.refreshText
+                }
+              >
+                Refresh
               </Text>
             </Pressable>
           </View>
 
-          {filteredActivities.length === 0 ? (
+          {filteredActivities.length ===
+          0 ? (
             <EmptyState
               filter={activeFilter}
               search={search}
             />
           ) : (
-            <View style={styles.taskList}>
+            <View
+              style={styles.taskList}
+            >
               {filteredActivities.map(
                 (activity) => (
                   <TaskCard
-                    key={activity.id}
-                    activity={activity}
-                    onToggle={handleToggle}
-                    onDelete={handleDelete}
-                    onMoveToTomorrow={
-                      handleMoveToTomorrow
+                    key={
+                      activity.id
                     }
-                    onOpen={openActivity}
+                    activity={
+                      activity
+                    }
+                    compactMode={
+                      compactMode
+                    }
+                    onToggle={
+                      toggleTask
+                    }
+                    onOpen={
+                      setSelectedTask
+                    }
+                    onDelete={
+                      setDeleteTask
+                    }
+                    onMove={
+                      moveTask
+                    }
                   />
                 ),
               )}
             </View>
           )}
+
+          <View
+            style={styles.bottomSpace}
+          />
         </ScrollView>
       </View>
 
-      {/* TASK DETAILS MODAL */}
+      {/* DETAILS MODAL */}
+
       <Modal
-        visible={Boolean(selectedActivity)}
+        visible={Boolean(
+          selectedTask,
+        )}
         transparent
         animationType="fade"
-        onRequestClose={closeActivity}
+        onRequestClose={() =>
+          setSelectedTask(null)
+        }
       >
-        <View style={styles.modalOverlay}>
+        <View
+          style={styles.modalOverlay}
+        >
           <Pressable
-            style={styles.modalBackdrop}
-            onPress={closeActivity}
+            style={styles.backdrop}
+            onPress={() =>
+              setSelectedTask(null)
+            }
           />
 
-          {selectedActivity && (
+          {selectedTask && (
             <View
-              style={[
-                styles.taskModal,
-                !isDesktop &&
-                  styles.mobileTaskModal,
-              ]}
+              style={styles.modal}
             >
-              <View style={styles.modalHeader}>
-                <View style={styles.modalHeaderText}>
-                  <Text style={styles.modalEyebrow}>
-                    TASK DETAILS
-                  </Text>
+              <View
+                style={
+                  styles.modalHeader
+                }
+              >
+                <View
+                  style={
+                    styles.modalHeaderText
+                  }
+                >
+                  <View
+                    style={
+                      styles.sectionLabel
+                    }
+                  >
+                    <View
+                      style={
+                        styles.sectionLabelLine
+                      }
+                    />
 
-                  <Text style={styles.modalTitle}>
-                    {selectedActivity.title}
+                    <Text
+                      style={
+                        styles.sectionLabelText
+                      }
+                    >
+                      TASK DETAILS
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={
+                      styles.modalTitle
+                    }
+                  >
+                    {
+                      selectedTask.title
+                    }
                   </Text>
                 </View>
 
                 <Pressable
-                  style={styles.modalClose}
-                  onPress={closeActivity}
+                  onPress={() =>
+                    setSelectedTask(
+                      null,
+                    )
+                  }
+                  style={
+                    styles.closeButton
+                  }
                 >
-                  <Text style={styles.modalCloseText}>
-                    ×
-                  </Text>
+                  <Ionicons
+                    name="close"
+                    size={21}
+                    color={
+                      COLORS.muted
+                    }
+                  />
                 </Pressable>
               </View>
 
-              {selectedActivity.description ? (
-                <Text style={styles.modalDescription}>
-                  {selectedActivity.description}
-                </Text>
-              ) : (
-                <Text
-                  style={[
-                    styles.modalDescription,
-                    styles.modalMutedText,
-                  ]}
-                >
-                  No description added.
-                </Text>
-              )}
+              <Text
+                style={
+                  styles.modalDescription
+                }
+              >
+                {selectedTask.description ||
+                  'No description added for this task.'}
+              </Text>
 
-              <View style={styles.detailGrid}>
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>
-                    Life Area
-                  </Text>
+              <View
+                style={
+                  styles.detailGrid
+                }
+              >
+                <Detail
+                  icon="grid-outline"
+                  label="Life Area"
+                  value={
+                    selectedTask.category ||
+                    'Other'
+                  }
+                />
 
-                  <Text style={styles.detailValue}>
-                    {getCategoryIcon(
-                      selectedActivity,
-                    )}{' '}
-                    {selectedActivity.category ||
-                      'Other'}
-                  </Text>
-                </View>
+                <Detail
+                  icon="calendar-outline"
+                  label="Date"
+                  value={formatDate(
+                    selectedTask.scheduled_date,
+                  )}
+                />
 
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>
-                    Date
-                  </Text>
+                <Detail
+                  icon="time-outline"
+                  label="Time"
+                  value={formatTime(
+                    selectedTask.scheduled_time,
+                  )}
+                />
 
-                  <Text style={styles.detailValue}>
-                    {formatDate(
-                      selectedActivity.scheduled_date,
-                    )}
-                  </Text>
-                </View>
+                <Detail
+                  icon="flag-outline"
+                  label="Priority"
+                  value={priorityLabel(
+                    selectedTask.priority,
+                  )}
+                />
 
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>
-                    Time
-                  </Text>
+                <Detail
+                  icon="repeat-outline"
+                  label="Repeat"
+                  value={
+                    selectedTask.repeat ||
+                    'None'
+                  }
+                />
 
-                  <Text style={styles.detailValue}>
-                    {selectedActivity.scheduled_time
-                      ? formatTime(
-                          selectedActivity.scheduled_time,
-                        )
-                      : 'No time set'}
-                  </Text>
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>
-                    Priority
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.detailValue,
-                      {
-                        color: getPriorityColor(
-                          selectedActivity.priority,
-                        ),
-                      },
-                    ]}
-                  >
-                    {getPriorityLabel(
-                      selectedActivity.priority,
-                    )}
-                  </Text>
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>
-                    Repeat
-                  </Text>
-
-                  <Text style={styles.detailValue}>
-                    {selectedActivity.repeat ||
-                      'none'}
-                  </Text>
-                </View>
-
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>
-                    Reminder
-                  </Text>
-
-                  <Text style={styles.detailValue}>
-                    {selectedActivity.reminder
-                      ? `${selectedActivity.reminder_minutes ?? 15} min before`
-                      : 'Off'}
-                  </Text>
-                </View>
+                <Detail
+                  icon="notifications-outline"
+                  label="Reminder"
+                  value={
+                    selectedTask.reminder
+                      ? `${selectedTask.reminder_minutes ?? 15} min before`
+                      : 'Off'
+                  }
+                />
               </View>
 
-              {isOverdue(selectedActivity) && (
-                <View style={styles.modalWarning}>
-                  <Text style={styles.modalWarningIcon}>
-                    !
-                  </Text>
+              {isOverdue(
+                selectedTask,
+              ) && (
+                <View
+                  style={
+                    styles.warningBox
+                  }
+                >
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={22}
+                    color={
+                      COLORS.danger
+                    }
+                  />
 
-                  <View style={styles.modalWarningText}>
+                  <View
+                    style={
+                      styles.warningBody
+                    }
+                  >
                     <Text
-                      style={styles.modalWarningTitle}
+                      style={
+                        styles.warningTitle
+                      }
                     >
                       This task is overdue
                     </Text>
 
                     <Text
-                      style={styles.modalWarningSubtitle}
+                      style={
+                        styles.warningText
+                      }
                     >
-                      Move it to tomorrow or edit its
-                      schedule.
+                      You can move it to tomorrow
+                      or edit its schedule.
                     </Text>
                   </View>
                 </View>
               )}
 
-              <View style={styles.modalActions}>
+              <View
+                style={
+                  styles.modalActions
+                }
+              >
                 <Pressable
-                  style={styles.secondaryAction}
-                  onPress={editActivity}
+                  onPress={editTask}
+                  style={
+                    styles.modalAction
+                  }
                 >
-                  <Text
-                    style={styles.secondaryActionIcon}
-                  >
-                    ✎
-                  </Text>
+                  <Ionicons
+                    name="create-outline"
+                    size={18}
+                    color={
+                      COLORS.navy
+                    }
+                  />
 
                   <Text
-                    style={styles.secondaryActionText}
+                    style={
+                      styles.modalActionText
+                    }
                   >
                     Edit
                   </Text>
                 </Pressable>
 
                 <Pressable
-                  style={styles.secondaryAction}
                   onPress={() =>
-                    handleToggle(selectedActivity)
+                    toggleTask(
+                      selectedTask,
+                    )
+                  }
+                  style={
+                    styles.modalAction
                   }
                 >
-                  <Text
-                    style={styles.secondaryActionIcon}
-                  >
-                    {selectedActivity.completed
-                      ? '↶'
-                      : '✓'}
-                  </Text>
+                  <Ionicons
+                    name={
+                      selectedTask.completed
+                        ? 'refresh-outline'
+                        : 'checkmark-outline'
+                    }
+                    size={18}
+                    color={
+                      COLORS.navy
+                    }
+                  />
 
                   <Text
-                    style={styles.secondaryActionText}
+                    style={
+                      styles.modalActionText
+                    }
                   >
-                    {selectedActivity.completed
+                    {selectedTask.completed
                       ? 'Reopen'
                       : 'Complete'}
                   </Text>
                 </Pressable>
 
-                {isOverdue(selectedActivity) && (
+                {isOverdue(
+                  selectedTask,
+                ) && (
                   <Pressable
-                    style={styles.secondaryAction}
                     onPress={() =>
-                      handleMoveToTomorrow(
-                        selectedActivity,
+                      moveTask(
+                        selectedTask,
                       )
                     }
+                    style={
+                      styles.modalAction
+                    }
                   >
-                    <Text
-                      style={styles.secondaryActionIcon}
-                    >
-                      ↷
-                    </Text>
+                    <Ionicons
+                      name="arrow-forward-outline"
+                      size={18}
+                      color={
+                        COLORS.orange
+                      }
+                    />
 
                     <Text
-                      style={styles.secondaryActionText}
+                      style={[
+                        styles.modalActionText,
+                        {
+                          color:
+                            COLORS.orange,
+                        },
+                      ]}
                     >
                       Tomorrow
                     </Text>
@@ -1618,22 +2123,31 @@ export default function TasksScreen() {
                 )}
 
                 <Pressable
+                  onPress={() => {
+                    setSelectedTask(
+                      null,
+                    );
+                    setDeleteTask(
+                      selectedTask,
+                    );
+                  }}
                   style={[
-                    styles.secondaryAction,
-                    styles.dangerAction,
+                    styles.modalAction,
+                    styles.modalDangerAction,
                   ]}
-                  onPress={() =>
-                    handleDelete(selectedActivity)
-                  }
                 >
-                  <Text
-                    style={styles.dangerActionIcon}
-                  >
-                    🗑
-                  </Text>
+                  <Ionicons
+                    name="trash-outline"
+                    size={18}
+                    color={
+                      COLORS.danger
+                    }
+                  />
 
                   <Text
-                    style={styles.dangerActionText}
+                    style={
+                      styles.modalDangerText
+                    }
                   >
                     Trash
                   </Text>
@@ -1644,110 +2158,151 @@ export default function TasksScreen() {
         </View>
       </Modal>
 
-      {/* TRASH CONFIRMATION MODAL */}
+      {/* DELETE MODAL */}
+
       <Modal
-        visible={Boolean(trashActivity)}
+        visible={Boolean(
+          deleteTask,
+        )}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          if (!isDeleting) {
-            setTrashActivity(null);
-          }
-        }}
+        onRequestClose={() =>
+          setDeleteTask(null)
+        }
       >
-        <View style={styles.confirmOverlay}>
+        <View
+          style={
+            styles.modalOverlay
+          }
+        >
           <Pressable
-            style={styles.confirmBackdrop}
-            onPress={() => {
-              if (!isDeleting) {
-                setTrashActivity(null);
-              }
-            }}
+            style={styles.backdrop}
+            onPress={() =>
+              setDeleteTask(null)
+            }
           />
 
-          {trashActivity && (
+          {deleteTask && (
             <View
-              style={[
-                styles.confirmModal,
-                !isDesktop &&
-                  styles.confirmModalMobile,
-              ]}
+              style={
+                styles.confirmModal
+              }
             >
-              <View style={styles.confirmIcon}>
-                <Text style={styles.confirmIconText}>
-                  🗑
-                </Text>
+              <View
+                style={
+                  styles.confirmIcon
+                }
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={25}
+                  color={
+                    COLORS.danger
+                  }
+                />
               </View>
 
-              <Text style={styles.confirmTitle}>
+              <Text
+                style={
+                  styles.confirmTitle
+                }
+              >
                 Move to Trash?
               </Text>
 
-              <Text style={styles.confirmMessage}>
-                This task will be moved to Trash. You
-                can restore it later.
+              <Text
+                style={
+                  styles.confirmText
+                }
+              >
+                This task will be moved to
+                Trash. You can restore it later.
               </Text>
 
-              <View style={styles.confirmTask}>
+              <View
+                style={
+                  styles.confirmTask
+                }
+              >
                 <Text
                   numberOfLines={2}
-                  style={styles.confirmTaskTitle}
+                  style={
+                    styles.confirmTaskTitle
+                  }
                 >
-                  {trashActivity.title}
+                  {deleteTask.title}
                 </Text>
 
-                <Text style={styles.confirmTaskMeta}>
-                  {trashActivity.category ||
-                    'Other'}{' '}
-                  •{' '}
+                <Text
+                  style={
+                    styles.confirmTaskMeta
+                  }
+                >
                   {formatDate(
-                    trashActivity.scheduled_date,
+                    deleteTask.scheduled_date,
+                  )}
+                  {' • '}
+                  {formatTime(
+                    deleteTask.scheduled_time,
                   )}
                 </Text>
               </View>
 
-              <View style={styles.confirmActions}>
+              <View
+                style={
+                  styles.confirmActions
+                }
+              >
                 <Pressable
-                  disabled={isDeleting}
-                  style={styles.cancelConfirmButton}
                   onPress={() =>
-                    setTrashActivity(null)
+                    setDeleteTask(
+                      null,
+                    )
+                  }
+                  style={
+                    styles.cancelButton
                   }
                 >
                   <Text
-                    style={styles.cancelConfirmText}
+                    style={
+                      styles.cancelText
+                    }
                   >
                     Cancel
                   </Text>
                 </Pressable>
 
                 <Pressable
-                  disabled={isDeleting}
+                  disabled={deleting}
+                  onPress={
+                    confirmDelete
+                  }
                   style={[
-                    styles.confirmDeleteButton,
-                    isDeleting &&
-                      styles.disabledButton,
+                    styles.deleteConfirmButton,
+                    deleting &&
+                      styles.disabled,
                   ]}
-                  onPress={confirmDelete}
                 >
-                  {isDeleting ? (
+                  {deleting ? (
                     <ActivityIndicator
                       size="small"
-                      color={WHITE}
+                      color={
+                        COLORS.white
+                      }
                     />
                   ) : (
                     <>
-                      <Text
-                        style={
-                          styles.confirmDeleteIcon
+                      <Ionicons
+                        name="trash-outline"
+                        size={16}
+                        color={
+                          COLORS.white
                         }
-                      >
-                        🗑
-                      </Text>
+                      />
 
                       <Text
                         style={
-                          styles.confirmDeleteText
+                          styles.deleteConfirmText
                         }
                       >
                         Move to Trash
@@ -1761,35 +2316,138 @@ export default function TasksScreen() {
         </View>
       </Modal>
 
-      {/* TOAST */}
       {toast && (
         <View
-          pointerEvents="none"
-          style={[
-            styles.toast,
-            toast.type === 'error'
-              ? styles.toastError
-              : styles.toastSuccess,
-          ]}
+          style={styles.toast}
         >
           <View
-            style={[
-              styles.toastIcon,
-              toast.type === 'error'
-                ? styles.toastIconError
-                : styles.toastIconSuccess,
-            ]}
+            style={styles.toastIcon}
           >
-            <Text style={styles.toastIconText}>
-              {toast.type === 'error' ? '!' : '✓'}
-            </Text>
+            <Ionicons
+              name="checkmark"
+              size={15}
+              color={
+                COLORS.white
+              }
+            />
           </View>
 
-          <Text style={styles.toastText}>
-            {toast.message}
+          <Text
+            style={styles.toastText}
+          >
+            {toast}
           </Text>
         </View>
       )}
+    </View>
+  );
+}
+
+function Stat({
+  icon,
+  label,
+  value,
+  orange,
+  danger,
+  success,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: number;
+  orange?: boolean;
+  danger?: boolean;
+  success?: boolean;
+}) {
+  const iconColor = danger
+    ? COLORS.danger
+    : success
+      ? COLORS.success
+      : orange
+        ? COLORS.orange
+        : COLORS.navy;
+
+  return (
+    <View style={styles.statCard}>
+      <View
+        style={[
+          styles.statIcon,
+          {
+            backgroundColor:
+              danger
+                ? COLORS.dangerSoft
+                : success
+                  ? COLORS.successSoft
+                  : orange
+                    ? COLORS.orangeSoft
+                    : '#EEF2F6',
+          },
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={19}
+          color={iconColor}
+        />
+      </View>
+
+      <Text
+        style={styles.statLabel}
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={[
+          styles.statNumber,
+          danger &&
+            styles.dangerNumber,
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function Detail({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View
+      style={styles.detail}
+    >
+      <View
+        style={styles.detailIcon}
+      >
+        <Ionicons
+          name={icon}
+          size={16}
+          color={COLORS.orange}
+        />
+      </View>
+
+      <View
+        style={styles.detailBody}
+      >
+        <Text
+          style={styles.detailLabel}
+        >
+          {label}
+        </Text>
+
+        <Text
+          style={styles.detailValue}
+          numberOfLines={2}
+        >
+          {value}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -1798,167 +2456,168 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: BACKGROUND,
+    backgroundColor:
+      COLORS.background,
+  },
+
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      COLORS.background,
+  },
+
+  loadingLogo: {
+    width: 58,
+    height: 58,
+    borderRadius: 17,
+    backgroundColor:
+      COLORS.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+
+  loadingText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    marginTop: 10,
   },
 
   sidebar: {
-    width: 280,
-    backgroundColor: WHITE,
+    width: 248,
+    backgroundColor:
+      COLORS.white,
     borderRightWidth: 1,
-    borderRightColor: BORDER,
+    borderRightColor:
+      COLORS.border,
     paddingHorizontal: 15,
-    paddingTop: 30,
-    paddingBottom: 20,
+    paddingTop: 25,
+    paddingBottom: 18,
   },
 
-  logoRow: {
+  brand: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    marginBottom: 48,
+    paddingHorizontal: 8,
+    marginBottom: 38,
   },
 
-  logo: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: BLUE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-
-  smallLogo: {
-    width: 38,
-    height: 38,
+  brandLogo: {
+    width: 39,
+    height: 39,
     borderRadius: 11,
-    backgroundColor: BLUE,
+    backgroundColor:
+      COLORS.navy,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 9,
   },
 
-  logoCheck: {
-    color: WHITE,
-    fontSize: 25,
-    fontWeight: '700',
-  },
-
-  logoText: {
-    color: TEXT,
-    fontSize: 23,
-    fontWeight: '800',
+  brandText: {
+    marginLeft: 10,
+    color: COLORS.navy,
+    fontSize: 21,
+    fontWeight: '900',
   },
 
   workspaceLabel: {
-    color: '#8996AA',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginHorizontal: 12,
-    marginBottom: 12,
+    color: COLORS.lightMuted,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+    marginHorizontal: 10,
+    marginBottom: 9,
   },
 
-  sideItem: {
-    height: 55,
-    borderRadius: 13,
+  sidebarItem: {
+    height: 45,
+    borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     marginBottom: 4,
   },
 
-  sideItemActive: {
-    backgroundColor: '#EAF5FF',
+  sidebarItemActive: {
+    backgroundColor:
+      COLORS.orangeSoft,
   },
 
-  sideIcon: {
-    width: 32,
-    color: '#6D7F99',
-    fontSize: 22,
-  },
-
-  sideIconActive: {
-    width: 32,
-    color: BLUE,
-    fontSize: 22,
-    fontWeight: '700',
-  },
-
-  sideText: {
-    color: '#65758F',
-    fontSize: 16,
+  sidebarText: {
+    marginLeft: 12,
+    color: COLORS.muted,
+    fontSize: 13,
     fontWeight: '600',
   },
 
-  sideTextActive: {
-    color: BLUE,
-    fontSize: 16,
-    fontWeight: '700',
+  sidebarTextActive: {
+    color: COLORS.navy,
+    fontWeight: '900',
   },
 
-  profileBottom: {
-    marginTop: 'auto',
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-    paddingTop: 18,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  profileAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: '#EAF3FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 11,
-  },
-
-  profileAvatarText: {
-    color: BLUE,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-
-  profileInfo: {
+  sidebarSpacer: {
     flex: 1,
   },
 
-  profileName: {
-    color: TEXT,
-    fontWeight: '700',
-    fontSize: 14,
+  profile: {
+    borderTopWidth: 1,
+    borderTopColor:
+      COLORS.border,
+    paddingTop: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
 
-  profileSubtitle: {
-    color: MUTED,
+  avatar: {
+    width: 39,
+    height: 39,
+    borderRadius: 11,
+    backgroundColor:
+      COLORS.orangeSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  avatarText: {
+    color: COLORS.orange,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  profileName: {
+    color: COLORS.navy,
     fontSize: 12,
+    fontWeight: '800',
+  },
+
+  profileCaption: {
+    color: COLORS.muted,
+    fontSize: 9,
     marginTop: 2,
   },
 
-  content: {
+  main: {
     flex: 1,
     minWidth: 0,
   },
 
-  topBar: {
-    height: 90,
-    backgroundColor: WHITE,
+  topbar: {
+    minHeight: 76,
+    backgroundColor:
+      COLORS.white,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-    paddingHorizontal: 24,
+    borderBottomColor:
+      COLORS.border,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
+    gap: 12,
   },
 
-  mobileTopBar: {
-    height: 76,
-    paddingHorizontal: 14,
-    gap: 10,
+  mobileTopbar: {
+    paddingHorizontal: 13,
   },
 
   mobileBrand: {
@@ -1966,340 +2625,448 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  mobileBrandText: {
-    color: TEXT,
-    fontSize: 19,
-    fontWeight: '800',
+  mobileLogo: {
+    width: 35,
+    height: 35,
+    borderRadius: 10,
+    backgroundColor:
+      COLORS.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  searchBox: {
+  mobileBrandText: {
+    marginLeft: 8,
+    color: COLORS.navy,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+
+  search: {
     flex: 1,
-    maxWidth: 780,
-    height: 52,
+    maxWidth: 680,
+    height: 43,
     borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 14,
-    backgroundColor: '#FBFCFE',
+    borderColor:
+      COLORS.border,
+    borderRadius: 10,
+    backgroundColor:
+      '#FAFBFC',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 13,
   },
 
-  mobileSearchBox: {
-    height: 46,
-    paddingHorizontal: 12,
-  },
-
-  searchIcon: {
-    color: '#71809A',
-    fontSize: 27,
-    marginRight: 10,
+  mobileSearch: {
+    minWidth: 0,
   },
 
   searchInput: {
     flex: 1,
-    color: TEXT,
-    fontSize: 15,
+    marginLeft: 9,
+    color: COLORS.text,
+    fontSize: 12,
     outlineStyle: 'none',
   } as any,
 
-  clearSearch: {
-    color: MUTED,
-    fontSize: 25,
-    paddingLeft: 10,
-  },
-
   topActions: {
+    marginLeft: 'auto',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginLeft: 'auto',
-  },
-
-  iconButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: '#F8FAFD',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-
-  topIcon: {
-    fontSize: 22,
-    color: TEXT,
-  },
-
-  notificationDot: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    minWidth: 17,
-    height: 17,
-    paddingHorizontal: 3,
-    borderRadius: 9,
-    backgroundColor: '#EF4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  notificationDotText: {
-    color: WHITE,
-    fontSize: 8,
-    fontWeight: '800',
+    gap: 9,
   },
 
   aiButton: {
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: BLUE,
-    paddingHorizontal: 18,
+    height: 41,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor:
+      COLORS.navy,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
 
-  aiButtonText: {
-    color: WHITE,
-    fontSize: 15,
+  aiText: {
+    color: COLORS.white,
+    fontSize: 11,
     fontWeight: '800',
   },
 
   avatarButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: '#EAF3FF',
+    width: 40,
+    height: 40,
+    borderRadius: 11,
+    backgroundColor:
+      COLORS.orangeSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   avatarButtonText: {
-    color: BLUE,
-    fontSize: 17,
-    fontWeight: '800',
+    color: COLORS.orange,
+    fontSize: 13,
+    fontWeight: '900',
   },
 
-  scrollContent: {
+  content: {
+    width: '100%',
+    maxWidth: 1420,
+    alignSelf: 'center',
     padding: 22,
-    paddingBottom: 50,
+    paddingBottom: 40,
   },
 
-  pageHeader: {
+  pageHero: {
+    minHeight: 205,
+    borderRadius: 21,
+    backgroundColor:
+      COLORS.navy,
+    padding: 27,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
-    gap: 16,
+    marginBottom: 22,
+    overflow: 'hidden',
   },
 
-  mobilePageHeader: {
-    alignItems: 'flex-start',
-  },
-
-  pageHeaderText: {
+  heroText: {
     flex: 1,
   },
 
+  orangeLine: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor:
+      COLORS.orange,
+    marginBottom: 12,
+  },
+
+  heroEyebrow: {
+    color: '#B4C5D5',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+
   pageTitle: {
-    color: TEXT,
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.6,
+    color: COLORS.white,
+    fontSize: 35,
+    fontWeight: '900',
+    marginTop: 5,
+    letterSpacing: -0.7,
   },
 
   pageSubtitle: {
-    color: MUTED,
-    fontSize: 15,
-    marginTop: 5,
-    lineHeight: 21,
+    color: '#C3D0DC',
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 7,
+    maxWidth: 550,
   },
 
   newTaskButton: {
-    backgroundColor: BLUE,
-    borderRadius: 13,
-    minHeight: 50,
-    paddingHorizontal: 20,
+    height: 45,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor:
+      COLORS.orange,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    marginLeft: 20,
   },
 
-  newTaskButtonText: {
-    color: WHITE,
-    fontSize: 15,
-    fontWeight: '800',
+  newTaskText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '900',
   },
 
-  statsRow: {
+  errorBox: {
+    borderRadius: 14,
+    backgroundColor:
+      COLORS.dangerSoft,
+    borderWidth: 1,
+    borderColor: '#F4C7C7',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+    gap: 10,
+  },
+
+  errorBody: {
+    flex: 1,
+  },
+
+  errorTitle: {
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  errorText: {
+    color: COLORS.muted,
+    fontSize: 10,
+    marginTop: 3,
+  },
+
+  retryButton: {
+    backgroundColor:
+      COLORS.danger,
+    borderRadius: 7,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+
+  retryText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 22,
   },
 
   statCard: {
-    width: 150,
-    minHeight: 105,
-    backgroundColor: WHITE,
+    flex: 1,
+    minWidth: 145,
+    minHeight: 110,
+    backgroundColor:
+      COLORS.white,
     borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
-    padding: 17,
+    borderColor:
+      COLORS.border,
+    borderRadius: 15,
+    padding: 15,
+  },
+
+  statIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
     justifyContent: 'center',
   },
 
   statLabel: {
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: '600',
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 10,
   },
 
   statNumber: {
-    color: TEXT,
-    fontSize: 27,
-    fontWeight: '800',
-    marginTop: 5,
+    color: COLORS.navy,
+    fontSize: 24,
+    fontWeight: '900',
+    marginTop: 2,
   },
 
-  overdueNumber: {
-    color: '#EF4444',
+  dangerNumber: {
+    color: COLORS.danger,
   },
 
-  filterSection: {
-    backgroundColor: WHITE,
+  filterCard: {
+    backgroundColor:
+      COLORS.white,
     borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
+    borderColor:
+      COLORS.border,
+    borderRadius: 17,
+    padding: 17,
+    marginBottom: 26,
+  },
+
+  filterHeader: {
     marginBottom: 14,
   },
 
+  sectionLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 6,
+  },
+
+  sectionLabelLine: {
+    width: 23,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor:
+      COLORS.orange,
+  },
+
+  sectionLabelText: {
+    color: COLORS.orange,
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+
+  filterTitle: {
+    color: COLORS.navy,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+
   filterScroll: {
-    padding: 7,
-    gap: 5,
+    gap: 7,
   },
 
   filterButton: {
-    minHeight: 45,
-    paddingHorizontal: 15,
-    borderRadius: 11,
+    minHeight: 40,
+    borderRadius: 8,
+    backgroundColor:
+      '#F3F5F7',
+    paddingHorizontal: 11,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
 
   filterButtonActive: {
-    backgroundColor: BLUE,
+    backgroundColor:
+      COLORS.orange,
   },
 
-  filterText: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  filterTextActive: {
-    color: WHITE,
-  },
-
-  filterCount: {
-    minWidth: 25,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#EEF2F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-
-  filterCountActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-
-  filterCountText: {
-    color: '#64748B',
-    fontSize: 11,
+  filterButtonText: {
+    color: COLORS.muted,
+    fontSize: 10,
     fontWeight: '800',
   },
 
-  filterCountTextActive: {
-    color: WHITE,
+  filterButtonTextActive: {
+    color: COLORS.white,
   },
 
-  filterPanel: {
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 22,
-    gap: 15,
+  filterCount: {
+    minWidth: 21,
+    height: 21,
+    borderRadius: 11,
+    backgroundColor:
+      '#E6E9ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+
+  filterCountActive: {
+    backgroundColor:
+      'rgba(255,255,255,0.22)',
+  },
+
+  filterCountText: {
+    color: COLORS.muted,
+    fontSize: 8,
+    fontWeight: '900',
+  },
+
+  filterCountTextActive: {
+    color: COLORS.white,
+  },
+
+  filterDivider: {
+    height: 1,
+    backgroundColor:
+      COLORS.border,
+    marginVertical: 15,
   },
 
   filterGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 11,
   },
 
-  filterGroupLabel: {
-    width: 75,
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: '800',
+  filterGroupTitle: {
+    width: 72,
+    color: COLORS.navy,
+    fontSize: 10,
+    fontWeight: '900',
   },
 
   smallFilter: {
-    paddingHorizontal: 12,
-    height: 34,
-    borderRadius: 9,
-    backgroundColor: '#F5F7FA',
+    minHeight: 32,
+    borderRadius: 7,
+    backgroundColor:
+      '#F4F6F8',
+    paddingHorizontal: 10,
+    marginRight: 6,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 7,
+    gap: 5,
   },
 
   smallFilterActive: {
-    backgroundColor: '#EAF5FF',
+    backgroundColor:
+      COLORS.orangeSoft,
     borderWidth: 1,
-    borderColor: '#C7E4FF',
+    borderColor:
+      '#FFD0AA',
   },
 
   smallFilterText: {
-    color: '#71809A',
-    fontSize: 12,
-    fontWeight: '700',
+    color: COLORS.muted,
+    fontSize: 9,
+    fontWeight: '800',
   },
 
   smallFilterTextActive: {
-    color: BLUE,
+    color: COLORS.orangeDark,
+  },
+
+  prioritySmallDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 
   resultsHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent:
+      'space-between',
+    alignItems: 'flex-end',
     marginBottom: 13,
   },
 
   resultsTitle: {
-    color: TEXT,
-    fontSize: 19,
-    fontWeight: '800',
+    color: COLORS.navy,
+    fontSize: 20,
+    fontWeight: '900',
   },
 
   resultsSubtitle: {
-    color: MUTED,
-    fontSize: 13,
+    color: COLORS.muted,
+    fontSize: 10,
     marginTop: 3,
   },
 
   refreshButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    height: 35,
+    paddingHorizontal: 11,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
+    borderRadius: 8,
+    backgroundColor:
+      COLORS.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
 
   refreshText: {
-    color: BLUE,
-    fontSize: 13,
-    fontWeight: '700',
+    color: COLORS.navy,
+    fontSize: 9,
+    fontWeight: '800',
   },
 
   taskList: {
@@ -2307,90 +3074,102 @@ const styles = StyleSheet.create({
   },
 
   taskCard: {
-    backgroundColor: WHITE,
+    backgroundColor:
+      COLORS.white,
     borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
-    padding: 17,
+    borderColor:
+      COLORS.border,
+    borderRadius: 15,
+    padding: 15,
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
 
-  taskCardCompleted: {
-    opacity: 0.7,
+  taskCardCompact: {
+    paddingVertical: 10,
   },
 
   taskCardOverdue: {
-    borderColor: '#F7CACA',
+    borderColor: '#F2C8C8',
+  },
+
+  taskCardCompleted: {
+    opacity: 0.68,
   },
 
   checkbox: {
-    width: 27,
-    height: 27,
-    borderRadius: 9,
+    width: 24,
+    height: 24,
+    borderRadius: 7,
     borderWidth: 2,
-    borderColor: '#C9D3E2',
+    borderColor: '#CBD2DA',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 13,
+    marginRight: 11,
     marginTop: 2,
   },
 
   checkboxCompleted: {
-    backgroundColor: BLUE,
-    borderColor: BLUE,
+    backgroundColor:
+      COLORS.orange,
+    borderColor:
+      COLORS.orange,
   },
 
-  checkboxCheck: {
-    color: WHITE,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-
-  taskMain: {
+  taskBody: {
     flex: 1,
     minWidth: 0,
   },
 
-  taskTopRow: {
+  taskTitleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
 
   taskTitle: {
     flex: 1,
-    color: TEXT,
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
+    color: COLORS.navy,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '900',
   },
 
-  taskTitleCompleted: {
-    textDecorationLine: 'line-through',
-    color: '#8491A5',
+  taskTitleCompact: {
+    fontSize: 12,
+  },
+
+  completedTitle: {
+    color: COLORS.muted,
+    textDecorationLine:
+      'line-through',
   },
 
   priorityDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
-    marginTop: 7,
-    marginLeft: 10,
+    marginTop: 6,
+    marginLeft: 8,
   },
 
   taskDescription: {
-    color: MUTED,
-    fontSize: 13,
-    lineHeight: 19,
+    color: COLORS.muted,
+    fontSize: 10,
+    lineHeight: 16,
     marginTop: 5,
   },
 
-  taskMeta: {
+  metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 11,
+    gap: 10,
+    marginTop: 9,
+  },
+
+  metaRowCompact: {
+    marginTop: 4,
+    gap: 7,
   },
 
   metaItem: {
@@ -2399,219 +3178,140 @@ const styles = StyleSheet.create({
     gap: 4,
   },
 
-  metaIcon: {
-    fontSize: 12,
-  },
-
   metaText: {
-    color: '#74839A',
-    fontSize: 12,
-    fontWeight: '600',
+    color: COLORS.muted,
+    fontSize: 9,
+    fontWeight: '700',
   },
 
-  taskBottomRow: {
+  badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 7,
-    marginTop: 11,
+    gap: 6,
+    marginTop: 9,
   },
 
   priorityBadge: {
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
 
-  priorityBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
+  priorityText: {
+    fontSize: 8,
+    fontWeight: '900',
   },
 
   overdueBadge: {
-    backgroundColor: '#FFF0F0',
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor:
+      COLORS.dangerSoft,
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
 
   overdueBadgeText: {
-    color: '#EF4444',
-    fontSize: 10,
-    fontWeight: '800',
+    color: COLORS.danger,
+    fontSize: 8,
+    fontWeight: '900',
   },
 
   carriedBadge: {
-    backgroundColor: '#F2EDFF',
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor:
+      '#F1EEFF',
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
 
   carriedBadgeText: {
-    color: '#7C3AED',
-    fontSize: 10,
-    fontWeight: '800',
+    color: '#6941C6',
+    fontSize: 8,
+    fontWeight: '900',
   },
 
   taskActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 10,
     gap: 3,
+    marginLeft: 8,
   },
 
   actionButton: {
-    width: 35,
-    height: 35,
-    borderRadius: 9,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor:
+      '#F6F7F8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F7F9FC',
   },
 
-  deleteActionButton: {
-    backgroundColor: '#FFF7F7',
-  },
-
-  actionIcon: {
-    color: '#64748B',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-
-  moveIcon: {
-    color: BLUE,
-    fontSize: 19,
-    fontWeight: '800',
-  },
-
-  deleteIcon: {
-    fontSize: 14,
+  deleteAction: {
+    backgroundColor:
+      '#FFF5F5',
   },
 
   emptyState: {
-    backgroundColor: WHITE,
+    minHeight: 300,
+    backgroundColor:
+      COLORS.white,
     borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 18,
-    minHeight: 320,
+    borderColor:
+      COLORS.border,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 30,
+    padding: 25,
   },
 
   emptyIcon: {
-    width: 70,
-    height: 70,
-    borderRadius: 22,
-    backgroundColor: '#EAF5FF',
+    width: 63,
+    height: 63,
+    borderRadius: 19,
+    backgroundColor:
+      COLORS.orangeSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-  },
-
-  emptyIconText: {
-    color: BLUE,
-    fontSize: 32,
-    fontWeight: '800',
   },
 
   emptyTitle: {
-    color: TEXT,
-    fontSize: 20,
-    fontWeight: '800',
+    color: COLORS.navy,
+    fontSize: 17,
+    fontWeight: '900',
+    marginTop: 12,
   },
 
-  emptySubtitle: {
-    color: MUTED,
-    fontSize: 14,
+  emptyDescription: {
+    color: COLORS.muted,
+    fontSize: 10,
+    lineHeight: 16,
     textAlign: 'center',
-    marginTop: 7,
-    maxWidth: 400,
-    lineHeight: 21,
+    maxWidth: 360,
+    marginTop: 4,
   },
 
   emptyButton: {
-    backgroundColor: BLUE,
-    borderRadius: 11,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    marginTop: 20,
-  },
-
-  emptyButtonText: {
-    color: WHITE,
-    fontWeight: '800',
-    fontSize: 13,
-  },
-
-  errorBox: {
-    backgroundColor: '#FFF4F4',
-    borderWidth: 1,
-    borderColor: '#FFD1D1',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 18,
-  },
-
-  errorTitle: {
-    color: '#B42318',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  errorText: {
-    color: '#8D3A35',
-    fontSize: 13,
-    marginTop: 5,
-  },
-
-  retryButton: {
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    backgroundColor: '#B42318',
+    height: 39,
     paddingHorizontal: 13,
-    paddingVertical: 8,
     borderRadius: 8,
-  },
-
-  retryButtonText: {
-    color: WHITE,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-
-  loadingScreen: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
+    backgroundColor:
+      COLORS.orange,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  loadingLogo: {
-    width: 64,
-    height: 64,
-    borderRadius: 19,
-    backgroundColor: BLUE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-
-  loadingLogoText: {
-    color: WHITE,
-    fontSize: 35,
-    fontWeight: '800',
-  },
-
-  loadingText: {
-    color: MUTED,
-    fontSize: 14,
+    gap: 5,
     marginTop: 14,
   },
 
-  /* DETAILS MODAL */
+  emptyButtonText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+
+  bottomSpace: {
+    height: 30,
+  },
 
   modalOverlay: {
     flex: 1,
@@ -2620,403 +3320,311 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
-  modalBackdrop: {
+  backdrop: {
     position: 'absolute',
     top: 0,
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(17, 27, 45, 0.48)',
+    backgroundColor:
+      'rgba(7,26,47,0.58)',
   },
 
-  taskModal: {
+  modal: {
     width: '100%',
-    maxWidth: 620,
-    maxHeight: '90%',
-    backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 30,
-    shadowOffset: {
-      width: 0,
-      height: 12,
-    },
-    elevation: 10,
-  },
-
-  mobileTaskModal: {
-    padding: 20,
-    borderRadius: 20,
+    maxWidth: 650,
+    backgroundColor:
+      COLORS.white,
+    borderRadius: 22,
+    padding: 23,
   },
 
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 17,
   },
 
   modalHeaderText: {
     flex: 1,
-    paddingRight: 12,
-  },
-
-  modalEyebrow: {
-    color: BLUE,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 6,
   },
 
   modalTitle: {
-    color: TEXT,
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: '800',
+    color: COLORS.navy,
+    fontSize: 23,
+    fontWeight: '900',
+    marginTop: 3,
   },
 
-  modalClose: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#F5F7FA',
+  closeButton: {
+    width: 37,
+    height: 37,
+    borderRadius: 10,
+    backgroundColor:
+      '#F4F6F8',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  modalCloseText: {
-    color: MUTED,
-    fontSize: 25,
-    lineHeight: 27,
-  },
-
   modalDescription: {
-    color: '#596981',
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 20,
-  },
-
-  modalMutedText: {
-    color: '#9AA6B8',
-    fontStyle: 'italic',
+    color: COLORS.muted,
+    fontSize: 12,
+    lineHeight: 19,
+    marginTop: 15,
   },
 
   detailGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 18,
+    gap: 9,
+    marginTop: 17,
   },
 
-  detailItem: {
-    width: '48%',
+  detail: {
+    flex: 1,
     minWidth: 190,
-    backgroundColor: '#F8FAFD',
-    borderRadius: 13,
-    padding: 13,
-  },
-
-  detailLabel: {
-    color: '#8996AA',
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 5,
-  },
-
-  detailValue: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-
-  modalWarning: {
+    backgroundColor:
+      '#F8F9FA',
+    borderRadius: 11,
+    padding: 11,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF6F6',
-    borderWidth: 1,
-    borderColor: '#FFDCDC',
-    borderRadius: 13,
-    padding: 12,
-    marginBottom: 18,
+    gap: 9,
   },
 
-  modalWarningIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#FEE2E2',
-    color: '#DC2626',
-    textAlign: 'center',
-    lineHeight: 30,
-    fontSize: 16,
-    fontWeight: '800',
-    marginRight: 10,
+  detailIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor:
+      COLORS.orangeSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  modalWarningText: {
+  detailBody: {
     flex: 1,
   },
 
-  modalWarningTitle: {
-    color: '#B42318',
-    fontSize: 13,
+  detailLabel: {
+    color: COLORS.lightMuted,
+    fontSize: 8,
     fontWeight: '800',
   },
 
-  modalWarningSubtitle: {
-    color: '#8D3A35',
-    fontSize: 12,
+  detailValue: {
+    color: COLORS.navy,
+    fontSize: 10,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+
+  warningBox: {
+    marginTop: 15,
+    borderRadius: 11,
+    backgroundColor:
+      COLORS.dangerSoft,
+    borderWidth: 1,
+    borderColor: '#F3C7C7',
+    padding: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  warningBody: {
+    flex: 1,
+  },
+
+  warningTitle: {
+    color: COLORS.danger,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+
+  warningText: {
+    color: COLORS.muted,
+    fontSize: 9,
     marginTop: 2,
   },
 
   modalActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 7,
+    marginTop: 18,
   },
 
-  secondaryAction: {
-    minHeight: 46,
-    borderRadius: 12,
-    backgroundColor: '#F4F7FA',
-    paddingHorizontal: 14,
+  modalAction: {
+    minHeight: 42,
+    borderRadius: 8,
+    backgroundColor:
+      '#F2F4F6',
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
+    gap: 6,
   },
 
-  dangerAction: {
-    backgroundColor: '#FFF4F4',
+  modalActionText: {
+    color: COLORS.navy,
+    fontSize: 10,
+    fontWeight: '900',
   },
 
-  secondaryActionIcon: {
-    color: BLUE,
-    fontSize: 16,
-    fontWeight: '800',
+  modalDangerAction: {
+    backgroundColor:
+      COLORS.dangerSoft,
   },
 
-  secondaryActionText: {
-    color: '#526174',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-
-  dangerActionIcon: {
-    color: '#DC2626',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-
-  dangerActionText: {
-    color: '#DC2626',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-
-  /* TRASH CONFIRMATION */
-
-  confirmOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-
-  confirmBackdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: 'rgba(17, 27, 45, 0.55)',
+  modalDangerText: {
+    color: COLORS.danger,
+    fontSize: 10,
+    fontWeight: '900',
   },
 
   confirmModal: {
     width: '100%',
-    maxWidth: 440,
-    backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 25,
+    maxWidth: 430,
+    backgroundColor:
+      COLORS.white,
+    borderRadius: 21,
+    padding: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 35,
-    shadowOffset: {
-      width: 0,
-      height: 15,
-    },
-    elevation: 12,
-  },
-
-  confirmModalMobile: {
-    borderRadius: 22,
-    padding: 22,
   },
 
   confirmIcon: {
-    width: 62,
-    height: 62,
-    borderRadius: 20,
-    backgroundColor: '#FFF1F1',
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor:
+      COLORS.dangerSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 15,
-  },
-
-  confirmIconText: {
-    fontSize: 25,
   },
 
   confirmTitle: {
-    color: TEXT,
-    fontSize: 21,
-    fontWeight: '800',
-    textAlign: 'center',
+    color: COLORS.navy,
+    fontSize: 20,
+    fontWeight: '900',
+    marginTop: 13,
   },
 
-  confirmMessage: {
-    color: MUTED,
-    fontSize: 14,
-    lineHeight: 21,
+  confirmText: {
+    color: COLORS.muted,
+    fontSize: 11,
+    lineHeight: 17,
     textAlign: 'center',
-    marginTop: 8,
-    maxWidth: 350,
+    maxWidth: 340,
+    marginTop: 5,
   },
 
   confirmTask: {
     width: '100%',
-    backgroundColor: '#F7F9FC',
-    borderRadius: 14,
-    padding: 13,
-    marginTop: 18,
-    marginBottom: 18,
+    borderRadius: 10,
+    backgroundColor:
+      '#F7F8F9',
+    padding: 11,
+    marginTop: 15,
   },
 
   confirmTaskTitle: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: '800',
+    color: COLORS.navy,
+    fontSize: 11,
+    fontWeight: '900',
   },
 
   confirmTaskMeta: {
-    color: MUTED,
-    fontSize: 12,
-    marginTop: 4,
+    color: COLORS.muted,
+    fontSize: 9,
+    marginTop: 3,
   },
 
   confirmActions: {
     width: '100%',
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
+    marginTop: 17,
   },
 
-  cancelConfirmButton: {
+  cancelButton: {
     flex: 1,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#F1F4F8',
+    height: 45,
+    borderRadius: 9,
+    backgroundColor:
+      '#EEF1F4',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  cancelConfirmText: {
-    color: '#526174',
-    fontSize: 13,
-    fontWeight: '800',
+  cancelText: {
+    color: COLORS.navy,
+    fontSize: 10,
+    fontWeight: '900',
   },
 
-  confirmDeleteButton: {
+  deleteConfirmButton: {
     flex: 1,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#DC2626',
+    height: 45,
+    borderRadius: 9,
+    backgroundColor:
+      COLORS.danger,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: 6,
   },
 
-  confirmDeleteIcon: {
-    fontSize: 14,
+  deleteConfirmText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '900',
   },
 
-  confirmDeleteText: {
-    color: WHITE,
-    fontSize: 13,
-    fontWeight: '800',
+  disabled: {
+    opacity: 0.6,
   },
-
-  disabledButton: {
-    opacity: 0.65,
-  },
-
-  /* TOAST */
 
   toast: {
     position: 'absolute',
-    top: 22,
-    right: 22,
-    minHeight: 58,
-    maxWidth: 420,
-    borderRadius: 15,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    left: 20,
+    bottom: 25,
+    maxWidth: 360,
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor:
+      COLORS.navy,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
+    shadowOpacity: 0.16,
+    shadowRadius: 15,
     shadowOffset: {
       width: 0,
-      height: 8,
+      height: 7,
     },
     elevation: 8,
   },
 
-  toastSuccess: {
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: '#D7F0DF',
-  },
-
-  toastError: {
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: '#FFD5D5',
-  },
-
   toastIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 27,
+    height: 27,
+    borderRadius: 8,
+    backgroundColor:
+      COLORS.orange,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  toastIconSuccess: {
-    backgroundColor: '#DCFCE7',
-  },
-
-  toastIconError: {
-    backgroundColor: '#FEE2E2',
-  },
-
-  toastIconText: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-
   toastText: {
-    flexShrink: 1,
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 18,
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  pressed: {
+    opacity: 0.78,
   },
 });

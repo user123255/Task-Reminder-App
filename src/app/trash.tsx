@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,9 +10,8 @@ import {
   StyleSheet,
   Text,
   View,
-  type TextStyle,
-  type ViewStyle,
-} from 'react-native';
+  useWindowDimensions,
+} from "react-native";
 
 import {
   emptyTrash,
@@ -20,36 +19,54 @@ import {
   permanentlyDeleteActivity,
   restoreActivity,
   type Activity,
-} from '@/services/activities';
+} from "@/services/activities";
+
+const COLORS = {
+  navy: "#0B1F3A",
+  navyDark: "#07162A",
+  navySoft: "#132C4D",
+
+  orange: "#FF7A00",
+  orangeDark: "#E96800",
+  orangeSoft: "#FFF1E5",
+
+  gold: "#DFAE45",
+  goldSoft: "#FFF8E8",
+
+  white: "#FFFFFF",
+  background: "#F4F5F7",
+
+  text: "#142033",
+  muted: "#687386",
+  lightMuted: "#98A1AF",
+
+  border: "#E3E6EB",
+
+  success: "#20A464",
+  successSoft: "#EAF7F0",
+
+  danger: "#D94C4C",
+  dangerSoft: "#FFF0F0",
+};
 
 export default function TrashScreen() {
-  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 900;
 
-  const [items, setItems] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [emptying, setEmptying] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const loadTrash = useCallback(async () => {
     try {
       setLoading(true);
 
-      const trashed = await fetchTrashedActivities();
+      const result = await fetchTrashedActivities();
 
-      setItems(trashed);
+      setActivities(result ?? []);
     } catch (error) {
-      console.error('Failed to load Trash:', error);
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unable to load Trash.';
-
-      if (Platform.OS === 'web') {
-        window.alert(message);
-      } else {
-        Alert.alert('Trash', message);
-      }
+      console.error("Failed to load trash:", error);
     } finally {
       setLoading(false);
     }
@@ -57,735 +74,1435 @@ export default function TrashScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void loadTrash();
-    }, [loadTrash]),
+      loadTrash();
+    }, [loadTrash])
   );
 
-  const showMessage = (
-    title: string,
-    message: string,
-  ) => {
-    if (Platform.OS === 'web') {
-      window.alert(`${title}\n\n${message}`);
+  const goTo = (route: string) => {
+    setMenuOpen(false);
+    router.push(route as never);
+  };
+
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
     } else {
-      Alert.alert(title, message);
+      router.replace("/tasks");
     }
   };
 
-  const restore = async (id: string) => {
+  const formatDate = (value?: string | null) => {
+    if (!value) return "No date";
+
+    const date = new Date(`${value}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const formatTime = (value?: string | null) => {
+    if (!value) return "";
+
+    const [hourString, minuteString] = value.split(":");
+
+    const hour = Number(hourString);
+    const minute = Number(minuteString);
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) {
+      return value;
+    }
+
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+
+    return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+  };
+
+  const getCategoryName = (activity: Activity) => {
+    return activity.category || "Other";
+  };
+
+  const getCategoryColor = (activity: Activity) => {
+    switch (getCategoryName(activity).toLowerCase()) {
+      case "work":
+        return COLORS.orange;
+      case "personal":
+        return COLORS.gold;
+      case "health":
+        return COLORS.success;
+      case "shopping":
+        return COLORS.danger;
+      default:
+        return COLORS.navySoft;
+    }
+  };
+
+  const getActivityDate = (activity: Activity) => {
+    return activity.scheduled_date || null;
+  };
+
+  const getActivityTime = (activity: Activity) => {
+    return activity.scheduled_time || null;
+  };
+
+  const getActivityId = (activity: Activity) => {
+    return String(activity.id);
+  };
+
+  const handleRestore = async (activity: Activity) => {
+    const id = getActivityId(activity);
+
     try {
       setProcessingId(id);
 
       await restoreActivity(id);
 
-      setItems((current) =>
-        current.filter((item) => item.id !== id),
-      );
-
-      showMessage(
-        'Restored',
-        'The task has been restored successfully.',
+      setActivities((current) =>
+        current.filter((item) => getActivityId(item) !== id)
       );
     } catch (error) {
-      console.error('Failed to restore task:', error);
+      console.error("Failed to restore activity:", error);
 
-      showMessage(
-        'Restore failed',
-        error instanceof Error
-          ? error.message
-          : 'The task could not be restored.',
-      );
+      if (Platform.OS === "web") {
+        window.alert("Unable to restore this activity.");
+      } else {
+        Alert.alert(
+          "Restore failed",
+          "Unable to restore this activity right now."
+        );
+      }
     } finally {
       setProcessingId(null);
     }
   };
 
-  const permanentlyRemove = async (id: string) => {
-    try {
-      setProcessingId(id);
+  const confirmPermanentDelete = (activity: Activity) => {
+    const id = getActivityId(activity);
 
-      await permanentlyDeleteActivity(id);
+    const performDelete = async () => {
+      try {
+        setProcessingId(id);
 
-      setItems((current) =>
-        current.filter((item) => item.id !== id),
-      );
-    } catch (error) {
-      console.error(
-        'Failed to permanently delete task:',
-        error,
-      );
+        await permanentlyDeleteActivity(id);
 
-      showMessage(
-        'Delete failed',
-        error instanceof Error
-          ? error.message
-          : 'The task could not be permanently deleted.',
-      );
-    } finally {
-      setProcessingId(null);
-    }
-  };
+        setActivities((current) =>
+          current.filter((item) => getActivityId(item) !== id)
+        );
+      } catch (error) {
+        console.error("Failed to permanently delete:", error);
 
-  const confirmPermanentDelete = (item: Activity) => {
-    if (Platform.OS === 'web') {
+        if (Platform.OS === "web") {
+          window.alert("Unable to permanently delete this activity.");
+        } else {
+          Alert.alert(
+            "Delete failed",
+            "Unable to permanently delete this activity."
+          );
+        }
+      } finally {
+        setProcessingId(null);
+      }
+    };
+
+    if (Platform.OS === "web") {
       const confirmed = window.confirm(
-        `Permanently delete "${item.title}"?\n\nThis cannot be undone.`,
+        `Permanently delete "${activity.title}"?\n\nThis action cannot be undone.`
       );
 
       if (confirmed) {
-        void permanentlyRemove(item.id);
+        performDelete();
       }
 
       return;
     }
 
     Alert.alert(
-      'Delete permanently?',
-      `"${item.title}" will be permanently deleted. This cannot be undone.`,
+      "Delete permanently?",
+      `"${activity.title}" will be permanently removed. This action cannot be undone.`,
       [
         {
-          text: 'Cancel',
-          style: 'cancel',
+          text: "Cancel",
+          style: "cancel",
         },
         {
-          text: 'Delete permanently',
-          style: 'destructive',
-          onPress: () => {
-            void permanentlyRemove(item.id);
-          },
+          text: "Delete",
+          style: "destructive",
+          onPress: performDelete,
         },
-      ],
+      ]
     );
   };
 
   const confirmEmptyTrash = () => {
-    if (items.length === 0) {
-      return;
-    }
+    if (activities.length === 0) return;
 
-    if (Platform.OS === 'web') {
+    const performEmpty = async () => {
+      try {
+        setLoading(true);
+
+        await emptyTrash();
+
+        setActivities([]);
+      } catch (error) {
+        console.error("Failed to empty trash:", error);
+
+        if (Platform.OS === "web") {
+          window.alert("Unable to empty Trash.");
+        } else {
+          Alert.alert(
+            "Unable to empty Trash",
+            "Please try again."
+          );
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (Platform.OS === "web") {
       const confirmed = window.confirm(
-        `Permanently delete all ${items.length} trashed task${
-          items.length === 1 ? '' : 's'
-        }?\n\nThis cannot be undone.`,
+        "Permanently delete everything in Trash?\n\nThis action cannot be undone."
       );
 
       if (confirmed) {
-        void handleEmptyTrash();
+        performEmpty();
       }
 
       return;
     }
 
     Alert.alert(
-      'Empty Trash?',
-      `All ${items.length} trashed task${
-        items.length === 1 ? '' : 's'
-      } will be permanently deleted. This cannot be undone.`,
+      "Empty Trash?",
+      "Every deleted activity will be permanently removed. This action cannot be undone.",
       [
         {
-          text: 'Cancel',
-          style: 'cancel',
+          text: "Cancel",
+          style: "cancel",
         },
         {
-          text: 'Empty Trash',
-          style: 'destructive',
-          onPress: () => {
-            void handleEmptyTrash();
-          },
+          text: "Empty Trash",
+          style: "destructive",
+          onPress: performEmpty,
         },
-      ],
+      ]
     );
   };
 
-  const handleEmptyTrash = async () => {
-    try {
-      setEmptying(true);
-
-      await emptyTrash();
-
-      setItems([]);
-
-      showMessage(
-        'Trash emptied',
-        'All trashed tasks have been permanently deleted.',
-      );
-    } catch (error) {
-      console.error('Failed to empty Trash:', error);
-
-      showMessage(
-        'Empty Trash failed',
-        error instanceof Error
-          ? error.message
-          : 'Trash could not be emptied.',
-      );
-    } finally {
-      setEmptying(false);
-    }
-  };
-
-  const formatDate = (date: string) => {
-    try {
-      const parsed = new Date(`${date}T00:00:00`);
-
-      return parsed.toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return date;
-    }
-  };
-
   return (
-    <View style={styles.container as ViewStyle}>
-      <View style={styles.header as ViewStyle}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backButton as ViewStyle}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={22}
-            color="#172033"
-          />
-        </Pressable>
-
-        <View style={{ flex: 1 }}>
-          <View style={styles.titleRow as ViewStyle}>
-            <View style={styles.trashIcon as ViewStyle}>
-              <Ionicons
-                name="trash-outline"
-                size={20}
-                color="#EF4444"
-              />
+    <View style={styles.page}>
+      {/* DESKTOP NAVIGATION */}
+      {isDesktop && (
+        <View style={styles.desktopNav}>
+          <View style={styles.brandBlock}>
+            <View style={styles.brandMark}>
+              <View style={styles.brandMarkInner} />
             </View>
 
-            <Text style={styles.title as TextStyle}>Trash</Text>
+            <View>
+              <Text style={styles.brandName}>TaskFlow</Text>
+              <Text style={styles.brandTagline}>
+                PLAN. FOCUS. ACHIEVE.
+              </Text>
+            </View>
           </View>
 
-          <Text style={styles.subtitle}>
-            Deleted tasks stay here until you restore or
-            permanently delete them.
-          </Text>
-        </View>
+          <View style={styles.navLinks}>
+            <NavItem
+              label="Home"
+              icon="home-outline"
+              onPress={() => goTo("/")}
+            />
 
-        {items.length > 0 && (
+            <NavItem
+              label="Tasks"
+              icon="checkmark-circle-outline"
+              onPress={() => goTo("/tasks")}
+            />
+
+            <NavItem
+              label="Calendar"
+              icon="calendar-outline"
+              onPress={() => goTo("/calendar")}
+            />
+
+            <NavItem
+              label="Library"
+              icon="library-outline"
+              onPress={() => goTo("/library")}
+            />
+
+            <NavItem
+              label="Reports"
+              icon="bar-chart-outline"
+              onPress={() => goTo("/reports")}
+            />
+
+            <NavItem
+              label="AI"
+              icon="sparkles-outline"
+              onPress={() => goTo("/ai-assist")}
+            />
+
+            <NavItem
+              label="Meetings"
+              icon="people-outline"
+              onPress={() => goTo("/meetings")}
+            />
+
+            <NavItem
+              label="Trash"
+              icon="trash-outline"
+              active
+              onPress={() => {}}
+            />
+          </View>
+
           <Pressable
-            onPress={confirmEmptyTrash}
-            disabled={emptying}
-            style={({ pressed }) => [
-              styles.emptyButton,
-              pressed && styles.pressed,
-              emptying && styles.disabled,
-            ]}
+            style={styles.navSettings}
+            onPress={() => goTo("/settings")}
           >
-            {emptying ? (
-              <ActivityIndicator
-                size="small"
-                color="#EF4444"
-              />
-            ) : (
-              <Text style={styles.emptyButtonText}>
-                Empty Trash
-              </Text>
-            )}
+            <Ionicons
+              name="settings-outline"
+              size={20}
+              color={COLORS.white}
+            />
           </Pressable>
-        )}
-      </View>
-
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator
-            size="large"
-            color="#208AEF"
-          />
-
-          <Text style={styles.loadingText}>
-            Loading Trash...
-          </Text>
         </View>
-      ) : items.length === 0 ? (
-        <View style={styles.emptyState}>
-          <View style={styles.emptyIcon}>
+      )}
+
+      {/* MOBILE NAVIGATION */}
+      {!isDesktop && (
+        <View style={styles.mobileNav}>
+          <Pressable
+            style={styles.mobileMenuButton}
+            onPress={() => setMenuOpen((value) => !value)}
+          >
+            <Ionicons
+              name={menuOpen ? "close" : "menu"}
+              size={25}
+              color={COLORS.white}
+            />
+          </Pressable>
+
+          <View style={styles.mobileBrand}>
+            <View style={styles.mobileBrandMark}>
+              <View style={styles.brandMarkInner} />
+            </View>
+
+            <Text style={styles.mobileBrandName}>TaskFlow</Text>
+          </View>
+
+          <Pressable
+            style={styles.mobileTrashButton}
+            onPress={() => {}}
+          >
             <Ionicons
               name="trash-outline"
-              size={42}
-              color="#94A3B8"
+              size={20}
+              color={COLORS.orange}
             />
-          </View>
-
-          <Text style={styles.emptyTitle}>
-            Trash is empty
-          </Text>
-
-          <Text style={styles.emptyText}>
-            Tasks you move to Trash will appear here.
-          </Text>
-
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.backToTasksButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.backToTasksText}>
-              Back to Tasks
-            </Text>
           </Pressable>
         </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.infoCard}>
-            <Ionicons
-              name="information-circle-outline"
-              size={20}
-              color="#208AEF"
-            />
+      )}
 
-            <Text style={styles.infoText}>
-              {items.length} deleted task
-              {items.length === 1 ? '' : 's'}. You can
-              restore them at any time.
-            </Text>
+      {/* MOBILE DRAWER */}
+      {!isDesktop && menuOpen && (
+        <View style={styles.mobileDrawer}>
+          <DrawerItem
+            label="Home"
+            icon="home-outline"
+            onPress={() => goTo("/")}
+          />
+
+          <DrawerItem
+            label="Tasks"
+            icon="checkmark-circle-outline"
+            onPress={() => goTo("/tasks")}
+          />
+
+          <DrawerItem
+            label="Calendar"
+            icon="calendar-outline"
+            onPress={() => goTo("/calendar")}
+          />
+
+          <DrawerItem
+            label="Library"
+            icon="library-outline"
+            onPress={() => goTo("/library")}
+          />
+
+          <DrawerItem
+            label="Reports"
+            icon="bar-chart-outline"
+            onPress={() => goTo("/reports")}
+          />
+
+          <DrawerItem
+            label="AI Assist"
+            icon="sparkles-outline"
+            onPress={() => goTo("/ai-assist")}
+          />
+
+          <DrawerItem
+            label="Meetings"
+            icon="people-outline"
+            onPress={() => goTo("/meetings")}
+          />
+
+          <DrawerItem
+            label="Settings"
+            icon="settings-outline"
+            onPress={() => goTo("/settings")}
+          />
+        </View>
+      )}
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* PAGE HERO */}
+        <View style={styles.hero}>
+          <View style={styles.heroCircleOne} />
+          <View style={styles.heroCircleTwo} />
+
+          <View style={styles.heroInner}>
+            <View style={styles.heroText}>
+              <View style={styles.eyebrow}>
+                <View style={styles.eyebrowLine} />
+                <Text style={styles.eyebrowText}>
+                  YOUR RECENTLY DELETED ACTIVITIES
+                </Text>
+              </View>
+
+              <Text style={styles.heroTitle}>
+                Trash
+              </Text>
+
+              <Text style={styles.heroDescription}>
+                Activities you delete are kept here so you can restore
+                them when needed or permanently remove them.
+              </Text>
+            </View>
+
+            <View style={styles.heroIcon}>
+              <Ionicons
+                name="trash-outline"
+                size={42}
+                color={COLORS.orange}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* CONTENT */}
+        <View style={styles.content}>
+          {/* HEADER CARD */}
+          <View style={styles.contentHeader}>
+            <View>
+              <View style={styles.contentEyebrow}>
+                <View style={styles.orangeLine} />
+                <Text style={styles.contentEyebrowText}>
+                  TRASH
+                </Text>
+              </View>
+
+              <Text style={styles.contentTitle}>
+                Deleted activities
+              </Text>
+
+              <Text style={styles.contentDescription}>
+                {activities.length === 0
+                  ? "Your Trash is currently empty."
+                  : `${activities.length} ${
+                      activities.length === 1
+                        ? "activity"
+                        : "activities"
+                    } currently in Trash.`}
+              </Text>
+            </View>
+
+            {activities.length > 0 && (
+              <Pressable
+                style={styles.emptyTrashButton}
+                onPress={confirmEmptyTrash}
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={17}
+                  color={COLORS.danger}
+                />
+
+                <Text style={styles.emptyTrashText}>
+                  Empty Trash
+                </Text>
+              </Pressable>
+            )}
           </View>
 
-          {items.map((item) => {
-            const processing =
-              processingId === item.id;
+          {/* LOADING */}
+          {loading ? (
+            <View style={styles.stateCard}>
+              <ActivityIndicator
+                size="large"
+                color={COLORS.orange}
+              />
 
-            return (
-              <View
-                key={item.id}
-                style={styles.card}
+              <Text style={styles.stateTitle}>
+                Loading Trash
+              </Text>
+
+              <Text style={styles.stateText}>
+                Getting your deleted activities...
+              </Text>
+            </View>
+          ) : activities.length === 0 ? (
+            /* EMPTY STATE */
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Ionicons
+                  name="trash-outline"
+                  size={38}
+                  color={COLORS.orange}
+                />
+              </View>
+
+              <View style={styles.emptyAccent} />
+
+              <Text style={styles.emptyTitle}>
+                Your Trash is empty
+              </Text>
+
+              <Text style={styles.emptyText}>
+                Deleted activities will appear here. You can restore
+                them or permanently remove them from this page.
+              </Text>
+
+              <Pressable
+                style={styles.backButton}
+                onPress={() => goTo("/tasks")}
               >
-                <View style={styles.cardTop}>
-                  <View style={styles.categoryIcon}>
-                    <Ionicons
-                      name={
-                        (item.category_icon as any) ||
-                        'apps-outline'
-                      }
-                      size={20}
-                      color={
-                        item.category_color ||
-                        '#64748B'
-                      }
-                    />
-                  </View>
+                <Ionicons
+                  name="arrow-back"
+                  size={17}
+                  color={COLORS.white}
+                />
 
-                  <View style={styles.cardContent}>
-                    <Text
-                      style={styles.taskTitle}
-                      numberOfLines={2}
+                <Text style={styles.backButtonText}>
+                  Back to Tasks
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {activities.map((activity, index) => {
+                const id = getActivityId(activity);
+                const processing = processingId === id;
+
+                const category = getCategoryName(activity);
+                const categoryColor = getCategoryColor(activity);
+                const date = getActivityDate(activity);
+                const time = getActivityTime(activity);
+
+                return (
+                  <View
+                    key={id}
+                    style={styles.activityCard}
+                  >
+                    <View style={styles.activityNumber}>
+                      <Text style={styles.activityNumberText}>
+                        {String(index + 1).padStart(2, "0")}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.categoryIcon,
+                        {
+                          backgroundColor:
+                            `${categoryColor}18`,
+                        },
+                      ]}
                     >
-                      {item.title}
-                    </Text>
+                      <Ionicons
+                        name="document-text-outline"
+                        size={21}
+                        color={categoryColor}
+                      />
+                    </View>
 
-                    <Text style={styles.category}>
-                      {item.category}
-                    </Text>
+                    <View style={styles.activityInfo}>
+                      <Text
+                        style={styles.activityTitle}
+                        numberOfLines={2}
+                      >
+                        {activity.title}
+                      </Text>
 
-                    <View style={styles.metaRow}>
-                      <View style={styles.metaItem}>
-                        <Ionicons
-                          name="calendar-outline"
-                          size={14}
-                          color="#64748B"
-                        />
-
-                        <Text style={styles.metaText}>
-                          {formatDate(
-                            item.scheduled_date,
-                          )}
-                        </Text>
-                      </View>
-
-                      {item.scheduled_time && (
+                      <View style={styles.activityMeta}>
                         <View style={styles.metaItem}>
                           <Ionicons
-                            name="time-outline"
-                            size={14}
-                            color="#64748B"
+                            name="pricetag-outline"
+                            size={13}
+                            color={COLORS.muted}
                           />
 
                           <Text style={styles.metaText}>
-                            {item.scheduled_time}
+                            {category}
                           </Text>
                         </View>
-                      )}
-                    </View>
-                  </View>
-                </View>
 
-                <View style={styles.actions}>
-                  <Pressable
-                    onPress={() =>
-                      void restore(item.id)
-                    }
-                    disabled={processing || emptying}
-                    style={({ pressed }) => [
-                      styles.restoreButton,
-                      pressed &&
-                        styles.pressed,
-                      (processing ||
-                        emptying) &&
-                        styles.disabled,
-                    ]}
-                  >
-                    {processing ? (
-                      <ActivityIndicator
-                        size="small"
-                        color="#208AEF"
-                      />
-                    ) : (
-                      <>
+                        {date && (
+                          <View style={styles.metaItem}>
+                            <Ionicons
+                              name="calendar-outline"
+                              size={13}
+                              color={COLORS.muted}
+                            />
+
+                            <Text style={styles.metaText}>
+                              {formatDate(date)}
+                            </Text>
+                          </View>
+                        )}
+
+                        {time && (
+                          <View style={styles.metaItem}>
+                            <Ionicons
+                              name="time-outline"
+                              size={13}
+                              color={COLORS.muted}
+                            />
+
+                            <Text style={styles.metaText}>
+                              {formatTime(time)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.actions}>
+                      <Pressable
+                        style={styles.restoreButton}
+                        onPress={() => handleRestore(activity)}
+                        disabled={processing}
+                      >
+                        {processing ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={COLORS.success}
+                          />
+                        ) : (
+                          <>
+                            <Ionicons
+                              name="refresh-outline"
+                              size={17}
+                              color={COLORS.success}
+                            />
+
+                            <Text style={styles.restoreText}>
+                              Restore
+                            </Text>
+                          </>
+                        )}
+                      </Pressable>
+
+                      <Pressable
+                        style={styles.deleteButton}
+                        onPress={() =>
+                          confirmPermanentDelete(activity)
+                        }
+                        disabled={processing}
+                      >
                         <Ionicons
-                          name="arrow-undo-outline"
+                          name="trash-outline"
                           size={17}
-                          color="#208AEF"
+                          color={COLORS.danger}
                         />
 
-                        <Text
-                          style={
-                            styles.restoreText
-                          }
-                        >
-                          Restore
+                        <Text style={styles.deleteText}>
+                          Delete
                         </Text>
-                      </>
-                    )}
-                  </Pressable>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
 
-                  <Pressable
-                    onPress={() =>
-                      confirmPermanentDelete(
-                        item,
-                      )
-                    }
-                    disabled={processing || emptying}
-                    style={({ pressed }) => [
-                      styles.deleteButton,
-                      pressed &&
-                        styles.pressed,
-                      (processing ||
-                        emptying) &&
-                        styles.disabled,
-                    ]}
-                  >
-                    <Ionicons
-                      name="trash-outline"
-                      size={17}
-                      color="#EF4444"
-                    />
+          {/* INFORMATION */}
+          <View style={styles.infoCard}>
+            <View style={styles.infoIcon}>
+              <Ionicons
+                name="information-circle-outline"
+                size={22}
+                color={COLORS.orange}
+              />
+            </View>
 
-                    <Text
-                      style={
-                        styles.deleteText
-                      }
-                    >
-                      Delete permanently
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
-      )}
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>
+                About Trash
+              </Text>
+
+              <Text style={styles.infoText}>
+                Restore an activity if you still need it. Permanently
+                deleted activities cannot be recovered.
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* FOOTER */}
+        <View style={styles.footer}>
+          <View style={styles.footerBrand}>
+            <View style={styles.footerMark}>
+              <View style={styles.footerMarkInner} />
+            </View>
+
+            <View>
+              <Text style={styles.footerBrandName}>
+                TaskFlow
+              </Text>
+
+              <Text style={styles.footerTagline}>
+                PLAN. FOCUS. ACHIEVE.
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.footerText}>
+            © 2026 TaskFlow. Built to help you stay organized.
+          </Text>
+
+          <Text style={styles.footerVersion}>
+            Version 1.0.0
+          </Text>
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
+function NavItem({
+  label,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  active?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.navItem,
+        active && styles.navItemActive,
+        pressed && styles.navItemPressed,
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={17}
+        color={active ? COLORS.orange : COLORS.white}
+      />
+
+      <Text
+        style={[
+          styles.navItemText,
+          active && styles.navItemTextActive,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function DrawerItem({
+  label,
+  icon,
+  onPress,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.drawerItem,
+        pressed && styles.drawerItemPressed,
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={21}
+        color={COLORS.orange}
+      />
+
+      <Text style={styles.drawerText}>
+        {label}
+      </Text>
+
+      <Ionicons
+        name="chevron-forward"
+        size={17}
+        color="#8490A0"
+        style={styles.drawerArrow}
+      />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  page: {
     flex: 1,
-    backgroundColor: '#F6F8FC',
+    backgroundColor: COLORS.background,
   },
 
-  header: {
-    minHeight: 92,
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+  desktopNav: {
+    height: 78,
+    backgroundColor: COLORS.navy,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 32,
     borderBottomWidth: 1,
-    borderBottomColor: '#E8EDF5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+    borderBottomColor: "rgba(255,255,255,0.08)",
   },
 
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#F6F8FC',
-    alignItems: 'center',
-    justifyContent: 'center',
+  brandBlock: {
+    width: 205,
+    flexDirection: "row",
+    alignItems: "center",
   },
 
-  headerTitleContainer: {
-    flex: 1,
-  },
-
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-
-  trashIcon: {
-    width: 34,
-    height: 34,
+  brandMark: {
+    width: 37,
+    height: 37,
     borderRadius: 10,
-    backgroundColor: '#FEF2F2',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: COLORS.orange,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    transform: [{ rotate: "45deg" }],
   },
 
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#172033',
+  brandMarkInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+    backgroundColor: COLORS.white,
   },
 
-  subtitle: {
-    marginTop: 3,
-    fontSize: 13,
-    color: '#64748B',
+  brandName: {
+    color: COLORS.white,
+    fontSize: 20,
+    fontWeight: "800",
   },
 
-  emptyButton: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    backgroundColor: '#FEF2F2',
-    alignItems: 'center',
-    justifyContent: 'center',
+  brandTagline: {
+    color: "#AAB7C8",
+    fontSize: 7,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    marginTop: 2,
   },
 
-  emptyButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
-
-  list: {
-    width: '100%',
-    maxWidth: 1000,
-    alignSelf: 'center',
-    padding: 24,
-    paddingBottom: 60,
-    gap: 14,
-  },
-
-  infoCard: {
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-
-  infoText: {
+  navLinks: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#334155',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 3,
   },
 
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E8EDF5',
-    padding: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    elevation: 2,
+  navItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 6,
+    gap: 6,
   },
 
-  cardTop: {
-    flexDirection: 'row',
-    gap: 14,
+  navItemActive: {
+    backgroundColor: "rgba(255,122,0,0.14)",
   },
 
-  categoryIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
+  navItemPressed: {
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
 
-  cardContent: {
-    flex: 1,
-  },
-
-  taskTitle: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
-    color: '#172033',
-  },
-
-  category: {
-    marginTop: 3,
+  navItemText: {
+    color: "#E5EBF3",
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
   },
 
-  metaRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
+  navItemTextActive: {
+    color: COLORS.orange,
+    fontWeight: "800",
   },
 
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  navSettings: {
+    width: 39,
+    height: 39,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  metaText: {
-    fontSize: 12,
-    color: '#64748B',
+  mobileNav: {
+    height: 66,
+    backgroundColor: COLORS.navy,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
   },
 
-  actions: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#EEF2F7',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+  mobileMenuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  restoreButton: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: '#EFF6FF',
+  mobileBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  mobileBrandMark: {
+    width: 29,
+    height: 29,
+    borderRadius: 8,
+    backgroundColor: COLORS.orange,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    transform: [{ rotate: "45deg" }],
+  },
+
+  mobileBrandName: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  mobileTrashButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  mobileDrawer: {
+    backgroundColor: COLORS.navyDark,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+
+  drawerItem: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    borderRadius: 7,
+  },
+
+  drawerItemPressed: {
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+
+  drawerText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 12,
+  },
+
+  drawerArrow: {
+    marginLeft: "auto",
+  },
+
+  scrollContent: {
+    paddingBottom: 0,
+  },
+
+  hero: {
+    minHeight: 300,
+    backgroundColor: COLORS.navy,
+    position: "relative",
+    overflow: "hidden",
+  },
+
+  heroCircleOne: {
+    position: "absolute",
+    width: 370,
+    height: 370,
+    borderRadius: 185,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.06)",
+    right: -150,
+    top: -170,
+  },
+
+  heroCircleTwo: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 1,
+    borderColor: "rgba(255,122,0,0.13)",
+    right: 40,
+    bottom: -145,
+  },
+
+  heroInner: {
+    width: "100%",
+    maxWidth: 1180,
+    alignSelf: "center",
+    paddingHorizontal: 28,
+    paddingVertical: 55,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 30,
+  },
+
+  heroText: {
+    flex: 1,
+  },
+
+  eyebrow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 13,
+  },
+
+  eyebrowLine: {
+    width: 27,
+    height: 2,
+    backgroundColor: COLORS.gold,
+  },
+
+  eyebrowText: {
+    color: COLORS.gold,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+  },
+
+  heroTitle: {
+    color: COLORS.white,
+    fontSize: 46,
+    lineHeight: 52,
+    fontWeight: "800",
+    letterSpacing: -1,
+  },
+
+  heroDescription: {
+    color: "#C1CCD9",
+    fontSize: 15,
+    lineHeight: 24,
+    maxWidth: 620,
+    marginTop: 12,
+  },
+
+  heroIcon: {
+    width: 105,
+    height: 105,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,122,0,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,122,0,0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  content: {
+    width: "100%",
+    maxWidth: 1180,
+    alignSelf: "center",
+    paddingHorizontal: 28,
+    paddingVertical: 55,
+  },
+
+  contentHeader: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 23,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 20,
+    marginBottom: 18,
+  },
+
+  contentEyebrow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 7,
+  },
+
+  orangeLine: {
+    width: 24,
+    height: 2,
+    backgroundColor: COLORS.orange,
+  },
+
+  contentEyebrowText: {
+    color: COLORS.orange,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1.4,
+  },
+
+  contentTitle: {
+    color: COLORS.navy,
+    fontSize: 27,
+    fontWeight: "800",
+  },
+
+  contentDescription: {
+    color: COLORS.muted,
+    fontSize: 13,
+    marginTop: 4,
+  },
+
+  emptyTrashButton: {
+    minHeight: 42,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#F1C7C7",
+    backgroundColor: COLORS.dangerSoft,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 7,
   },
 
-  restoreText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#208AEF',
+  emptyTrashText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: "800",
   },
 
-  deleteButton: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: '#FEF2F2',
+  stateCard: {
+    minHeight: 300,
+    backgroundColor: COLORS.white,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FECACA',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-
-  deleteText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
-
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
     padding: 30,
   },
 
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#64748B',
+  stateTitle: {
+    color: COLORS.navy,
+    fontSize: 18,
+    fontWeight: "800",
+    marginTop: 16,
+  },
+
+  stateText: {
+    color: COLORS.muted,
+    fontSize: 13,
+    marginTop: 5,
   },
 
   emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 30,
+    backgroundColor: COLORS.white,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    minHeight: 390,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 35,
   },
 
   emptyIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 28,
-    backgroundColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    backgroundColor: COLORS.orangeSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  emptyAccent: {
+    width: 35,
+    height: 2,
+    backgroundColor: COLORS.gold,
+    marginTop: 19,
   },
 
   emptyTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#172033',
+    color: COLORS.navy,
+    fontSize: 24,
+    fontWeight: "800",
+    marginTop: 16,
   },
 
   emptyText: {
-    maxWidth: 400,
-    marginTop: 8,
-    textAlign: 'center',
-    fontSize: 14,
+    color: COLORS.muted,
+    fontSize: 13,
     lineHeight: 21,
-    color: '#64748B',
+    textAlign: "center",
+    maxWidth: 520,
+    marginTop: 8,
   },
 
-  backToTasksButton: {
-    marginTop: 22,
-    minHeight: 44,
+  backButton: {
+    minHeight: 45,
     paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: '#208AEF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: COLORS.navy,
+    borderRadius: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 23,
   },
 
-  backToTasksText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  backButtonText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: "800",
   },
 
-  pressed: {
-    opacity: 0.7,
+  list: {
+    gap: 10,
   },
 
-  disabled: {
-    opacity: 0.5,
+  activityCard: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 15,
+    minHeight: 100,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  activityNumber: {
+    width: 33,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 4,
+  },
+
+  activityNumberText: {
+    color: COLORS.lightMuted,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  categoryIcon: {
+    width: 47,
+    height: 47,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+
+  activityInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  activityTitle: {
+    color: COLORS.navy,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  activityMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 7,
+  },
+
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  metaText: {
+    color: COLORS.muted,
+    fontSize: 11,
+  },
+
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginLeft: 15,
+  },
+
+  restoreButton: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.successSoft,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+
+  restoreText: {
+    color: COLORS.success,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  deleteButton: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.dangerSoft,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+
+  deleteText: {
+    color: COLORS.danger,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  infoCard: {
+    marginTop: 18,
+    backgroundColor: COLORS.goldSoft,
+    borderWidth: 1,
+    borderColor: "#F0DCA7",
+    borderRadius: 8,
+    padding: 17,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  infoIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 7,
+    backgroundColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 13,
+  },
+
+  infoContent: {
+    flex: 1,
+  },
+
+  infoTitle: {
+    color: COLORS.navy,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  infoText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    lineHeight: 19,
+    marginTop: 3,
+  },
+
+  footer: {
+    minHeight: 95,
+    backgroundColor: COLORS.navyDark,
+    paddingHorizontal: 28,
+    paddingVertical: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 20,
+  },
+
+  footerBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  footerMark: {
+    width: 29,
+    height: 29,
+    borderRadius: 8,
+    backgroundColor: COLORS.orange,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+    transform: [{ rotate: "45deg" }],
+  },
+
+  footerMarkInner: {
+    width: 11,
+    height: 11,
+    borderRadius: 3,
+    backgroundColor: COLORS.white,
+  },
+
+  footerBrandName: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  footerTagline: {
+    color: "#7F8EA1",
+    fontSize: 6,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+
+  footerText: {
+    color: "#8490A0",
+    fontSize: 11,
+    textAlign: "center",
+  },
+
+  footerVersion: {
+    color: "#657386",
+    fontSize: 10,
+    fontWeight: "600",
   },
 });

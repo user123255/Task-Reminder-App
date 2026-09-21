@@ -51,7 +51,12 @@ export type Activity = {
   original_task_id: string | null;
   created_at: string;
   updated_at: string | null;
+
+  /**
+   * When this is not null, the task is in Trash.
+   */
   deleted_at: string | null;
+
   category_icon?: string | null;
   category_color?: string | null;
 };
@@ -99,7 +104,7 @@ type TaskRow = {
   title: string;
   description: string | null;
   task_date: string;
-  start_time: string | null;
+  start_time: string;
   end_time: string | null;
   priority: string | null;
   recurrence: string | null;
@@ -125,15 +130,19 @@ type TaskRow = {
 
 /**
  * Local reminder notification mapping.
+ *
+ * Notification IDs belong to the device because they are generated
+ * by the device notification system.
  */
-const REMINDER_KEY =
-  '@taskflow_activity_reminders';
+const REMINDER_KEY = '@taskflow_activity_reminders';
 
 /**
  * Local reminder settings.
+ *
+ * These are device/app settings. They are separate from task Trash.
  */
-const SETTINGS_KEY =
-  '@taskflow_settings';
+const SETTINGS_KEY_PREFIX = '@taskflow_settings:';
+const LEGACY_SETTINGS_KEY = '@taskflow_settings';
 
 type StoredSettings = {
   notifications?: boolean;
@@ -167,21 +176,15 @@ async function requireUser() {
 /**
  * Get reminder notification IDs.
  */
-async function getReminderMap(): Promise<
-  Record<string, string>
-> {
+async function getReminderMap(): Promise<Record<string, string>> {
   try {
-    const value =
-      await AsyncStorage.getItem(
-        REMINDER_KEY,
-      );
+    const value = await AsyncStorage.getItem(REMINDER_KEY);
 
     if (!value) {
       return {};
     }
 
-    const parsed: unknown =
-      JSON.parse(value);
+    const parsed: unknown = JSON.parse(value);
 
     if (
       !parsed ||
@@ -191,26 +194,13 @@ async function getReminderMap(): Promise<
       return {};
     }
 
-    const result: Record<
-      string,
-      string
-    > = {};
+    const result: Record<string, string> = {};
 
-    for (const [
-      key,
-      notificationId,
-    ] of Object.entries(
-      parsed as Record<
-        string,
-        unknown
-      >,
+    for (const [key, notificationId] of Object.entries(
+      parsed as Record<string, unknown>,
     )) {
-      if (
-        typeof notificationId ===
-        'string'
-      ) {
-        result[key] =
-          notificationId;
+      if (typeof notificationId === 'string') {
+        result[key] = notificationId;
       }
     }
 
@@ -238,17 +228,12 @@ async function saveReminderMap(
 async function cancelStoredReminder(
   activityId: string,
 ): Promise<void> {
-  const map =
-    await getReminderMap();
-
-  const notificationId =
-    map[activityId];
+  const map = await getReminderMap();
+  const notificationId = map[activityId];
 
   if (notificationId) {
     try {
-      await cancelActivityReminder(
-        notificationId,
-      );
+      await cancelActivityReminder(notificationId);
     } catch (error) {
       console.warn(
         'Unable to cancel activity reminder:',
@@ -265,19 +250,18 @@ async function cancelStoredReminder(
 /**
  * Get stored reminder settings.
  */
-async function getReminderSettings(): Promise<StoredSettings> {
+async function getReminderSettings(userId: string): Promise<StoredSettings> {
   try {
+    const userKey = `${SETTINGS_KEY_PREFIX}${userId}`;
     const value =
-      await AsyncStorage.getItem(
-        SETTINGS_KEY,
-      );
+      (await AsyncStorage.getItem(userKey)) ??
+      (await AsyncStorage.getItem(LEGACY_SETTINGS_KEY));
 
     if (!value) {
       return {};
     }
 
-    const parsed: unknown =
-      JSON.parse(value);
+    const parsed: unknown = JSON.parse(value);
 
     if (
       !parsed ||
@@ -296,16 +280,14 @@ async function getReminderSettings(): Promise<StoredSettings> {
 /**
  * Schedule or reschedule a reminder.
  *
- * Notification failures must never prevent
- * task creation or updating.
+ * Notification failure must never prevent a task from
+ * being created or updated in Supabase.
  */
 async function syncActivityReminder(
   activity: Activity,
 ): Promise<void> {
   try {
-    await cancelStoredReminder(
-      activity.id,
-    );
+    await cancelStoredReminder(activity.id);
 
     if (
       activity.completed ||
@@ -315,12 +297,10 @@ async function syncActivityReminder(
       return;
     }
 
-    const settings =
-      await getReminderSettings();
+    const settings = await getReminderSettings(activity.user_id);
 
     if (
-      settings.notifications ===
-        false ||
+      settings.notifications === false ||
       settings.reminders === false
     ) {
       return;
@@ -335,10 +315,8 @@ async function syncActivityReminder(
       await scheduleActivityReminder({
         activityId: activity.id,
         title: activity.title,
-        scheduledDate:
-          activity.scheduled_date,
-        startTime:
-          activity.scheduled_time,
+        scheduledDate: activity.scheduled_date,
+        startTime: activity.scheduled_time,
         reminderMinutes,
       });
 
@@ -346,11 +324,9 @@ async function syncActivityReminder(
       return;
     }
 
-    const map =
-      await getReminderMap();
+    const map = await getReminderMap();
 
-    map[activity.id] =
-      notificationId;
+    map[activity.id] = notificationId;
 
     await saveReminderMap(map);
   } catch (error) {
@@ -390,30 +366,25 @@ function mapTaskToActivity(
       task.categories?.name ??
       'Uncategorized',
 
-    category_id:
-      task.category_id,
+    category_id: task.category_id,
 
     scheduled_date:
       task.task_date,
 
     scheduled_time:
-      normalizeTime(
-        task.start_time,
-      ),
+      normalizeTime(task.start_time),
 
     end_time:
       task.end_time
-        ? normalizeTime(
-            task.end_time,
-          )
+        ? normalizeTime(task.end_time)
         : null,
 
     repeat:
-      task.recurrence ??
+      task.recurrence ||
       'none',
 
     priority:
-      task.priority ??
+      task.priority ||
       'medium',
 
     reminder:
@@ -444,8 +415,7 @@ function mapTaskToActivity(
       task.updated_at,
 
     deleted_at:
-      task.deleted_at ??
-      null,
+      task.deleted_at ?? null,
 
     category_icon:
       task.categories?.icon ??
@@ -469,73 +439,13 @@ function isUuid(
 }
 
 /**
- * Validate YYYY-MM-DD without timezone conversion.
- */
-function isValidDateString(
-  value: string,
-): boolean {
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(
-      value,
-    )
-  ) {
-    return false;
-  }
-
-  const [
-    year,
-    month,
-    day,
-  ] = value
-    .split('-')
-    .map(Number);
-
-  if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    !Number.isInteger(day)
-  ) {
-    return false;
-  }
-
-  if (
-    month < 1 ||
-    month > 12 ||
-    day < 1
-  ) {
-    return false;
-  }
-
-  const daysInMonth =
-    new Date(
-      year,
-      month,
-      0,
-    ).getDate();
-
-  return day <= daysInMonth;
-}
-
-/**
- * Validate HH:mm or HH:mm:ss.
- */
-function isValidTimeString(
-  value: string,
-): boolean {
-  return /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(
-    value,
-  );
-}
-
-/**
  * Resolve a category for the authenticated user.
  */
 async function getCategoryId(
   category: string,
   userId: string,
 ): Promise<string> {
-  const value =
-    category.trim();
+  const value = category.trim();
 
   if (!value) {
     throw new Error(
@@ -543,6 +453,10 @@ async function getCategoryId(
     );
   }
 
+  /**
+   * If the caller supplied a category UUID,
+   * verify that it belongs to the current user.
+   */
   if (isUuid(value)) {
     const {
       data,
@@ -567,6 +481,9 @@ async function getCategoryId(
     );
   }
 
+  /**
+   * Find an existing category belonging to this user.
+   */
   const {
     data,
     error,
@@ -588,6 +505,9 @@ async function getCategoryId(
     return data.id;
   }
 
+  /**
+   * Custom category does not exist yet.
+   */
   const normalizedName =
     value.toLowerCase();
 
@@ -644,6 +564,10 @@ async function getCategoryId(
     .single();
 
   if (createError) {
+    /**
+     * If another request created the category
+     * at almost the same time, try fetching it again.
+     */
     const {
       data: existingCategory,
       error: existingError,
@@ -704,34 +628,15 @@ function validateActivityInput(
     );
   }
 
-  if (
-    !isValidDateString(
-      activity.scheduled_date,
-    )
-  ) {
+  if (!activity.scheduled_date) {
     throw new Error(
-      'Please select a valid date for this activity.',
+      'Please select a date for this activity.',
     );
   }
 
-  if (
-    !isValidTimeString(
-      activity.scheduled_time,
-    )
-  ) {
+  if (!activity.scheduled_time) {
     throw new Error(
-      'Please select a valid time for this activity.',
-    );
-  }
-
-  if (
-    activity.end_time &&
-    !isValidTimeString(
-      activity.end_time,
-    )
-  ) {
-    throw new Error(
-      'Please select a valid end time.',
+      'Please select a time for this activity.',
     );
   }
 
@@ -755,9 +660,7 @@ export async function createActivity(
   const user =
     await requireUser();
 
-  validateActivityInput(
-    activity,
-  );
+  validateActivityInput(activity);
 
   const categoryId =
     await getCategoryId(
@@ -775,28 +678,37 @@ export async function createActivity(
       category_id: categoryId,
       title:
         activity.title.trim(),
+
       description:
         activity.description?.trim() ||
         null,
+
       task_date:
         activity.scheduled_date,
+
       start_time:
         activity.scheduled_time,
+
       end_time:
         activity.end_time?.trim() ||
         null,
+
       priority:
         activity.priority ??
         'medium',
+
       recurrence:
         activity.repeat ??
         'none',
+
       reminder_enabled:
         activity.reminder ??
         true,
+
       reminder_minutes:
         activity.reminder_minutes ??
-        15,
+        5,
+
       completed: false,
       completed_at: null,
       carried_forward: false,
@@ -837,8 +749,10 @@ export async function createActivity(
 }
 
 /**
- * Fetch every active task belonging to
- * the authenticated user.
+ * Fetch every active task belonging to the
+ * authenticated Supabase user.
+ *
+ * Deleted tasks are excluded directly by Supabase.
  */
 export async function fetchActivities(): Promise<Activity[]> {
   const user =
@@ -880,7 +794,10 @@ export async function fetchActivities(): Promise<Activity[]> {
 }
 
 /**
- * Fetch one task, including Trash.
+ * Fetch one task, including tasks currently in Trash.
+ *
+ * This is intentional because restore and permanent deletion
+ * need to access trashed tasks.
  */
 export async function fetchActivity(
   id: string,
@@ -986,16 +903,6 @@ export async function updateActivity(
     updates.scheduled_date !==
     undefined
   ) {
-    if (
-      !isValidDateString(
-        updates.scheduled_date,
-      )
-    ) {
-      throw new Error(
-        'Please select a valid date.',
-      );
-    }
-
     cleanedUpdates.task_date =
       updates.scheduled_date;
   }
@@ -1004,16 +911,6 @@ export async function updateActivity(
     updates.scheduled_time !==
     undefined
   ) {
-    if (
-      !isValidTimeString(
-        updates.scheduled_time,
-      )
-    ) {
-      throw new Error(
-        'Please select a valid start time.',
-      );
-    }
-
     cleanedUpdates.start_time =
       updates.scheduled_time;
   }
@@ -1022,17 +919,6 @@ export async function updateActivity(
     updates.end_time !==
     undefined
   ) {
-    if (
-      updates.end_time &&
-      !isValidTimeString(
-        updates.end_time,
-      )
-    ) {
-      throw new Error(
-        'Please select a valid end time.',
-      );
-    }
-
     cleanedUpdates.end_time =
       updates.end_time?.trim() ||
       null;
@@ -1066,17 +952,6 @@ export async function updateActivity(
     updates.reminder_minutes !==
     undefined
   ) {
-    if (
-      updates.reminder_minutes !==
-        null &&
-      updates.reminder_minutes <
-        0
-    ) {
-      throw new Error(
-        'Reminder minutes cannot be negative.',
-      );
-    }
-
     cleanedUpdates.reminder_minutes =
       updates.reminder_minutes;
   }
@@ -1209,8 +1084,7 @@ export async function updateActivityCompletion(
       getLocalDateString();
 
     const {
-      error:
-        completionError,
+      error: completionError,
     } = await supabase
       .from('task_completions')
       .upsert(
@@ -1275,6 +1149,12 @@ export async function reopenActivity(
 
 /**
  * Move a task to Trash.
+ *
+ * IMPORTANT:
+ * This does NOT delete the task.
+ *
+ * It sets deleted_at in Supabase so the task remains
+ * recoverable and persists across devices.
  */
 export async function deleteActivity(
   id: string,
@@ -1310,6 +1190,8 @@ export async function deleteActivity(
 
 /**
  * Fetch tasks currently in Trash.
+ *
+ * Trash is now stored entirely in Supabase.
  */
 export async function fetchTrashedActivities(): Promise<Activity[]> {
   const user =
@@ -1386,7 +1268,7 @@ export async function restoreActivity(
 }
 
 /**
- * Permanently delete one task.
+ * Permanently delete one task from Supabase.
  */
 export async function permanentlyDeleteActivity(
   id: string,
@@ -1396,6 +1278,9 @@ export async function permanentlyDeleteActivity(
 
   await cancelStoredReminder(id);
 
+  /**
+   * Remove completion history first.
+   */
   const {
     error: completionError,
   } = await supabase
@@ -1411,6 +1296,9 @@ export async function permanentlyDeleteActivity(
     );
   }
 
+  /**
+   * Permanently remove the task.
+   */
   const {
     error,
   } = await supabase
@@ -1446,9 +1334,7 @@ export async function emptyTrash(): Promise<void> {
 
   const ids =
     (data ?? [])
-      .map(
-        (item) => item.id,
-      )
+      .map((item) => item.id)
       .filter(
         (id): id is string =>
           typeof id === 'string',
@@ -1458,6 +1344,9 @@ export async function emptyTrash(): Promise<void> {
     return;
   }
 
+  /**
+   * Cancel local reminders.
+   */
   const reminderMap =
     await getReminderMap();
 
@@ -1485,6 +1374,9 @@ export async function emptyTrash(): Promise<void> {
     reminderMap,
   );
 
+  /**
+   * Remove completion history.
+   */
   const {
     error: completionError,
   } = await supabase
@@ -1500,6 +1392,9 @@ export async function emptyTrash(): Promise<void> {
     );
   }
 
+  /**
+   * Permanently remove tasks.
+   */
   const {
     error,
   } = await supabase
@@ -1699,6 +1594,8 @@ export async function fetchCompletedActivities(): Promise<Activity[]> {
 
 /**
  * Search real tasks in Supabase.
+ *
+ * Searches title and description.
  */
 export async function searchActivities(
   searchTerm: string,
@@ -1805,6 +1702,8 @@ export async function fetchNextActivity(): Promise<Activity | null> {
 
 /**
  * Get overdue tasks.
+ *
+ * We do NOT automatically move them.
  */
 export async function fetchOverdueActivities(): Promise<Activity[]> {
   const activities =
@@ -1930,27 +1829,17 @@ export async function fetchActivitiesByPriority(
 }
 
 /**
- * Compatibility function.
+ * Kept for compatibility with existing screens.
  *
- * Overdue tasks are NOT automatically moved.
+ * Overdue tasks stay overdue until the user
+ * explicitly chooses to move them.
  */
 export async function carryForwardOverdueActivities(): Promise<Activity[]> {
   return [];
 }
 
 /**
- * Move a task exactly one calendar day forward.
- *
- * IMPORTANT:
- * This uses date-only calendar arithmetic rather than
- * JavaScript Date timezone conversion.
- *
- * Example:
- * 2026-09-21 -> 2026-09-22
- *
- * It can never intentionally produce:
- * 2026-09-21 -> 2026-09-23
- * from a single call.
+ * Move a task to tomorrow.
  */
 export async function moveActivityToTomorrow(
   id: string,
@@ -1976,27 +1865,74 @@ export async function moveActivityToTomorrow(
       1,
     );
 
-  return moveActivityToDate(
-    id,
-    tomorrow,
-    true,
+  const updated =
+    await updateActivity(
+      id,
+      {
+        scheduled_date:
+          tomorrow,
+      },
+    );
+
+  const user =
+    await requireUser();
+
+  const originalTaskId =
+    activity.original_task_id ??
+    activity.id;
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from('tasks')
+    .update({
+      carried_forward: true,
+      original_task_id:
+        originalTaskId,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .is('deleted_at', null)
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        icon,
+        color
+      )
+    `)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return updated;
+  }
+
+  const result =
+    mapTaskToActivity(
+      data as TaskRow,
+    );
+
+  await syncActivityReminder(
+    result,
   );
+
+  return result;
 }
 
 /**
- * Move a task to a selected date.
- *
- * `carriedForward` is used internally when the move
- * is specifically the carry-forward operation.
+ * Move a task to any selected date.
  */
 export async function moveActivityToDate(
   id: string,
   date: string,
-  carriedForward = false,
 ): Promise<Activity> {
-  if (
-    !isValidDateString(date)
-  ) {
+  if (!date) {
     throw new Error(
       'Please select a valid date.',
     );
@@ -2017,68 +1953,12 @@ export async function moveActivityToDate(
     );
   }
 
-  const updates: UpdateActivityInput = {
-    scheduled_date: date,
-  };
-
-  if (carriedForward) {
-    const user =
-      await requireUser();
-
-    const originalTaskId =
-      activity.original_task_id ??
-      activity.id;
-
-    const {
-      data,
-      error,
-    } = await supabase
-      .from('tasks')
-      .update({
-        task_date: date,
-        carried_forward: true,
-        original_task_id:
-          originalTaskId,
-      })
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .select(`
-        *,
-        categories (
-          id,
-          name,
-          icon,
-          color
-        )
-      `)
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    if (!data) {
-      throw new Error(
-        'The task could not be carried forward.',
-      );
-    }
-
-    const result =
-      mapTaskToActivity(
-        data as TaskRow,
-      );
-
-    await syncActivityReminder(
-      result,
-    );
-
-    return result;
-  }
-
   return updateActivity(
     id,
-    updates,
+    {
+      scheduled_date:
+        date,
+    },
   );
 }
 
@@ -2151,7 +2031,11 @@ export function getMinutesUntilActivity(
  */
 export function getActivityStatus(
   activity: Activity,
-): 'completed' | 'overdue' | 'upcoming' | 'now' {
+):
+  | 'completed'
+  | 'overdue'
+  | 'upcoming'
+  | 'now' {
   if (activity.completed) {
     return 'completed';
   }
@@ -2251,9 +2135,6 @@ export function getActivityCountdown(
 
 /**
  * Parse database date/time as local time.
- *
- * This is appropriate for comparing a task's
- * date + time against the device's current time.
  */
 export function parseLocalDateTime(
   date: string,
@@ -2287,35 +2168,13 @@ export function parseLocalDateTime(
 }
 
 /**
- * Add calendar days to YYYY-MM-DD.
- *
- * This intentionally avoids constructing a Date
- * from the YYYY-MM-DD string because task dates are
- * calendar dates, not UTC timestamps.
+ * Add days to YYYY-MM-DD.
  */
 export function addDaysToDateString(
   dateString: string,
   days: number,
 ): string {
-  if (
-    !isValidDateString(
-      dateString,
-    )
-  ) {
-    throw new Error(
-      `Invalid date: ${dateString}`,
-    );
-  }
-
-  if (
-    !Number.isInteger(days)
-  ) {
-    throw new Error(
-      'The number of days must be a whole number.',
-    );
-  }
-
-  let [
+  const [
     year,
     month,
     day,
@@ -2323,69 +2182,20 @@ export function addDaysToDateString(
     .split('-')
     .map(Number);
 
-  let remaining =
-    Math.abs(days);
+  const date =
+    new Date(
+      year,
+      month - 1,
+      day,
+    );
 
-  const direction =
-    days >= 0 ? 1 : -1;
+  date.setDate(
+    date.getDate() + days,
+  );
 
-  while (remaining > 0) {
-    day += direction;
-
-    if (direction > 0) {
-      const daysInMonth =
-        new Date(
-          year,
-          month,
-          0,
-        ).getDate();
-
-      if (
-        day > daysInMonth
-      ) {
-        day = 1;
-        month += 1;
-
-        if (month > 12) {
-          month = 1;
-          year += 1;
-        }
-      }
-    } else {
-      if (day < 1) {
-        month -= 1;
-
-        if (month < 1) {
-          month = 12;
-          year -= 1;
-        }
-
-        day =
-          new Date(
-            year,
-            month,
-            0,
-          ).getDate();
-      }
-    }
-
-    remaining -= 1;
-  }
-
-  return [
-    String(year).padStart(
-      4,
-      '0',
-    ),
-    String(month).padStart(
-      2,
-      '0',
-    ),
-    String(day).padStart(
-      2,
-      '0',
-    ),
-  ].join('-');
+  return getLocalDateString(
+    date,
+  );
 }
 
 /**

@@ -1,705 +1,1565 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
-import {
-  Activity,
-  fetchTodayActivities,
-  getActivityStatus,
-} from "@/services/activities";
-import { supabase } from "@/utils/supabase";
+import { useAuth } from "@/hooks/use-auth";
+import { fetchActivities, type Activity } from "@/services/activities";
 
 const COLORS = {
-  primary: "#208AEF",
-  primaryLight: "#EAF4FF",
-  background: "#F6F8FC",
-  card: "#FFFFFF",
-  text: "#172033",
-  muted: "#718096",
-  border: "#E7ECF3",
-  success: "#16A34A",
-  warning: "#F59E0B",
-  danger: "#EF4444",
-};
+  navy: "#0B1F3A",
+  navyDark: "#07162A",
+  navySoft: "#163354",
 
-type MessageRole = "user" | "assistant";
+  orange: "#FF7A00",
+  orangeDark: "#E96500",
+  orangeSoft: "#FFF1E5",
+
+  gold: "#DFAE45",
+  goldSoft: "#FBF5E7",
+
+  background: "#F4F5F7",
+  white: "#FFFFFF",
+
+  text: "#10213A",
+  muted: "#64748B",
+  lightMuted: "#94A3B8",
+
+  border: "#E2E6EB",
+  borderStrong: "#D4DAE2",
+
+  success: "#198754",
+  successSoft: "#EAF6EF",
+
+  warning: "#B7791F",
+  warningSoft: "#FFF7E5",
+
+  danger: "#C94A4A",
+  dangerSoft: "#FCECEC",
+
+  purple: "#7257A8",
+  purpleSoft: "#F1EEFF",
+
+  soft: "#F7F8FA",
+};
 
 type ChatMessage = {
   id: string;
-  role: MessageRole;
-  content: string;
+  role: "assistant" | "user";
+  text: string;
 };
 
-type AIResponse = {
-  answer?: string;
-  error?: string;
-};
+const STARTER_PROMPTS = [
+  "Plan my day",
+  "What should I focus on next?",
+  "Summarize my tasks",
+  "Help me with overdue tasks",
+];
 
-function getActivityTime(activity: Activity): string {
-  const possibleActivity = activity as Activity & {
-    time?: string | null;
-    startTime?: string | null;
-    start_time?: string | null;
-  };
+const INITIAL_MESSAGES: ChatMessage[] = [
+  {
+    id: "welcome",
+    role: "assistant",
+    text:
+      "Hi! I’m TaskFlow AI Assist. I can help you think through your tasks, priorities, schedule, and productivity workflow.",
+  },
+];
 
-  return (
-    possibleActivity.time ||
-    possibleActivity.startTime ||
-    possibleActivity.start_time ||
-    ""
+function localAssistantReply(
+  prompt: string,
+  activities: Activity[],
+) {
+  const normalized = prompt.toLowerCase();
+
+  const incomplete = activities.filter(
+    (item) => !item.completed,
   );
-}
 
-function formatTime(time?: string | null) {
-  if (!time) return "";
+  const overdue = incomplete.filter((item) => {
+    const time = item.scheduled_time || "00:00";
+    const date = new Date(
+      `${item.scheduled_date}T${time}`,
+    );
 
-  const [hourString, minuteString] = time.split(":");
-  const hour = Number(hourString);
-  const minute = minuteString ?? "00";
+    return (
+      !Number.isNaN(date.getTime()) &&
+      date.getTime() < Date.now()
+    );
+  });
 
-  if (Number.isNaN(hour)) {
-    return time;
+  if (normalized.includes("overdue")) {
+    if (overdue.length === 0) {
+      return "You currently have no overdue tasks. Your schedule is clear from a missed-task perspective.";
+    }
+
+    const names = overdue
+      .slice(0, 3)
+      .map((item) => `“${item.title}”`)
+      .join(", ");
+
+    return `You have ${overdue.length} overdue ${
+      overdue.length === 1 ? "task" : "tasks"
+    }. Start by reviewing ${names}${
+      overdue.length > 3
+        ? " and the remaining overdue items"
+        : ""
+    }.`;
   }
 
-  const suffix = hour >= 12 ? "PM" : "AM";
-  const displayHour = hour % 12 || 12;
+  if (
+    normalized.includes("summarize") ||
+    normalized.includes("summary")
+  ) {
+    const completed = activities.filter(
+      (item) => item.completed,
+    ).length;
 
-  return `${displayHour}:${minute} ${suffix}`;
-}
-
-function createTaskContext(activities: Activity[]) {
-  if (activities.length === 0) {
-    return "The user has no tasks scheduled for today.";
+    return `You have ${activities.length} total tasks, ${completed} completed, and ${incomplete.length} still open. I can help you break the open work into priorities and a realistic schedule.`;
   }
 
-  const completed = activities.filter(
-    (activity) => activity.completed
-  );
+  if (
+    normalized.includes("focus") ||
+    normalized.includes("next")
+  ) {
+    const next = incomplete
+      .slice()
+      .sort((a, b) =>
+        `${a.scheduled_date} ${a.scheduled_time}`.localeCompare(
+          `${b.scheduled_date} ${b.scheduled_time}`,
+        ),
+      )[0];
 
-  const pending = activities.filter(
-    (activity) => !activity.completed
-  );
+    return next
+      ? `A useful next step is “${next.title}”. It is scheduled for ${
+          next.scheduled_date
+        } at ${
+          next.scheduled_time ||
+          "an unscheduled time"
+        }.`
+      : "You do not have any open tasks right now. This is a good moment to review your goals or prepare tomorrow’s plan.";
+  }
 
-  const overdue = pending.filter(
-    (activity) =>
-      getActivityStatus(activity) === "overdue"
-  );
+  if (
+    normalized.includes("plan") ||
+    normalized.includes("day")
+  ) {
+    return "Start with one important task, protect a focused block of time for it, then group lighter tasks together. Keep reminders on for anything tied to a specific time and leave some room for unexpected work.";
+  }
 
-  const highPriority = pending.filter(
-    (activity) =>
-      activity.priority?.toLowerCase() === "high"
-  );
-
-  const taskList = activities
-    .map((activity, index) => {
-      const time = formatTime(
-        getActivityTime(activity)
-      );
-
-      return [
-        `${index + 1}. ${activity.title}`,
-        time ? `Time: ${time}` : null,
-        `Priority: ${activity.priority || "medium"}`,
-        `Status: ${
-          activity.completed
-            ? "completed"
-            : getActivityStatus(activity)
-        }`,
-        activity.description
-          ? `Description: ${activity.description}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" | ");
-    })
-    .join("\n");
-
-  return `
-Today's TaskFlow information:
-
-Total tasks: ${activities.length}
-Completed: ${completed.length}
-Pending: ${pending.length}
-Overdue: ${overdue.length}
-High priority pending: ${highPriority.length}
-
-Tasks:
-${taskList}
-`;
+  return "I’m ready to help with planning, prioritization, overdue work, task summaries, and productivity routines. Try one of the quick prompts below.";
 }
+
+const NAV_ITEMS = [
+  {
+    label: "Home",
+    icon: "home-outline",
+    route: "/",
+  },
+  {
+    label: "Tasks",
+    icon: "checkmark-circle-outline",
+    route: "/tasks",
+  },
+  {
+    label: "Calendar",
+    icon: "calendar-outline",
+    route: "/calendar",
+  },
+  {
+    label: "Library",
+    icon: "library-outline",
+    route: "/library",
+  },
+  {
+    label: "Reports",
+    icon: "bar-chart-outline",
+    route: "/reports",
+  },
+  {
+    label: "AI Assist",
+    icon: "sparkles-outline",
+    route: "/ai-assist",
+  },
+  {
+    label: "Meetings",
+    icon: "videocam-outline",
+    route: "/meetings",
+  },
+  {
+    label: "Trash",
+    icon: "trash-outline",
+    route: "/trash",
+  },
+  {
+    label: "Help",
+    icon: "help-circle-outline",
+    route: "/help",
+  },
+  {
+    label: "Settings",
+    icon: "settings-outline",
+    route: "/settings",
+  },
+] as const;
 
 export default function AIAssistScreen() {
-  const [activities, setActivities] =
-    useState<Activity[]>([]);
-
-  const [message, setMessage] =
-    useState("");
+  const { width } = useWindowDimensions();
+  const { displayName } = useAuth();
 
   const [messages, setMessages] =
-    useState<ChatMessage[]>([]);
+    useState<ChatMessage[]>(INITIAL_MESSAGES);
 
-  const [loading, setLoading] =
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loadingContext, setLoadingContext] =
     useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const [asking, setAsking] =
-    useState(false);
+  const isDesktop = width >= 1000;
+  const isMobile = width < 700;
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
+  const taskSummary = useMemo(() => {
+    const total = activities.length;
 
-      const today =
-        await fetchTodayActivities();
-
-      setActivities(today || []);
-    } catch (error) {
-      console.error(
-        "AI Assist load error:",
-        error
-      );
-
-      setActivities([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const stats = useMemo(() => {
     const completed = activities.filter(
-      (activity) => activity.completed
-    );
+      (item) => item.completed,
+    ).length;
 
-    const pending = activities.filter(
-      (activity) => !activity.completed
-    );
-
-    const highPriority = pending.filter(
-      (activity) =>
-        activity.priority?.toLowerCase() ===
-        "high"
-    );
-
-    const overdue = pending.filter(
-      (activity) =>
-        getActivityStatus(activity) ===
-        "overdue"
-    );
-
-    const progress =
-      activities.length === 0
-        ? 0
-        : Math.round(
-            (completed.length /
-              activities.length) *
-              100
-          );
+    const open = total - completed;
 
     return {
+      total,
       completed,
-      pending,
-      highPriority,
-      overdue,
-      progress,
+      open,
     };
   }, [activities]);
 
-  const askAI = useCallback(
-    async (question?: string) => {
-      const text = (
-        question ?? message
-      ).trim();
+  React.useEffect(() => {
+    let mounted = true;
 
-      if (!text) {
-        return;
+    const loadContext = async () => {
+      try {
+        const data = await fetchActivities();
+
+        if (mounted) {
+          setActivities(data);
+        }
+      } catch (error) {
+        console.warn(
+          "AI Assist context could not be loaded:",
+          error,
+        );
+      } finally {
+        if (mounted) {
+          setLoadingContext(false);
+        }
       }
+    };
 
-      setAsking(true);
+    void loadContext();
 
-      const userMessage: ChatMessage = {
-        id: `${Date.now()}-user`,
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const goTo = (route: string) => {
+    setDrawerOpen(false);
+    router.push(route as never);
+  };
+
+  const sendMessage = async (
+    value = draft,
+  ) => {
+    const text = value.trim();
+
+    if (!text || sending) {
+      return;
+    }
+
+    setDraft("");
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: `user-${Date.now()}`,
         role: "user",
-        content: text,
-      };
+        text,
+      },
+    ]);
+
+    setSending(true);
+
+    try {
+      const reply = localAssistantReply(
+        text,
+        activities,
+      );
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 450),
+      );
 
       setMessages((current) => [
         ...current,
-        userMessage,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          text: reply,
+        },
       ]);
-
-      setMessage("");
-
-      try {
-        const history = messages
-          .slice(-10)
-          .map((item) => ({
-            role: item.role,
-            content: item.content,
-          }));
-
-        const taskContext =
-          createTaskContext(activities);
-
-        const {
-          data,
-          error,
-        } = await supabase.functions.invoke(
-          "ai-assist",
-          {
-            body: {
-              message: text,
-              history,
-              taskContext,
-            },
-          }
-        );
-
-        if (error) {
-          console.error(
-            "AI Assist function error:",
-            error
-          );
-
-          throw new Error(
-            error.message ||
-              "Unable to connect to AI."
-          );
-        }
-
-        const result =
-          data as AIResponse | null;
-
-        if (
-          !result ||
-          !result.answer
-        ) {
-          throw new Error(
-            result?.error ||
-              "The AI returned an empty response."
-          );
-        }
-
-        const assistantMessage: ChatMessage = {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          content: result.answer,
-        };
-
-        setMessages((current) => [
-          ...current,
-          assistantMessage,
-        ]);
-      } catch (error) {
-        console.error(
-          "AI Assist error:",
-          error
-        );
-
-        const errorMessage: ChatMessage = {
-          id: `${Date.now()}-error`,
-          role: "assistant",
-          content:
-            "I couldn't connect to the AI assistant right now. Please check your connection and try again.",
-        };
-
-        setMessages((current) => [
-          ...current,
-          errorMessage,
-        ]);
-      } finally {
-        setAsking(false);
-      }
-    },
-    [activities, message, messages]
-  );
-
-  const quickQuestions = [
-    "What should I focus on today?",
-    "How is my progress?",
-    "What tasks are pending?",
-    "Do I have anything urgent?",
-  ];
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={
-          styles.content
-        }
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <Pressable
-            style={styles.back}
-            onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace("/");
-              }
-            }}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={
+        Platform.OS === "ios"
+          ? "padding"
+          : undefined
+      }
+    >
+      <View style={styles.container}>
+        <View style={styles.main}>
+          <TopNavigation
+            isDesktop={isDesktop}
+            displayName={displayName}
+            onMenu={() => setDrawerOpen(true)}
+          />
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[
+              styles.page,
+              isDesktop && styles.pageDesktop,
+            ]}
           >
-            <Ionicons
-              name="arrow-back"
-              size={21}
-              color={COLORS.text}
-            />
-          </Pressable>
-
-          <View style={styles.headerText}>
-            <Text style={styles.title}>
-              AI Assist
-            </Text>
-
-            <Text style={styles.subtitle}>
-              Your personal AI productivity
-              assistant
-            </Text>
-          </View>
-
-          <View style={styles.onlineBadge}>
+            {/* HERO */}
             <View
-              style={styles.onlineDot}
-            />
-
-            <Text
-              style={styles.onlineText}
-            >
-              AI
-            </Text>
-          </View>
-        </View>
-
-        {/* HERO */}
-        <View style={styles.hero}>
-          <View style={styles.sparkle}>
-            <Ionicons
-              name="sparkles"
-              size={25}
-              color="#FFFFFF"
-            />
-          </View>
-
-          <Text style={styles.heroTitle}>
-            Ask me anything
-          </Text>
-
-          <Text style={styles.heroText}>
-            I can answer general questions,
-            explain concepts, help you plan,
-            write things for you, or use your
-            TaskFlow schedule when you ask about
-            your productivity.
-          </Text>
-        </View>
-
-        {/* STATS */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
-              {activities.length}
-            </Text>
-
-            <Text style={styles.statLabel}>
-              Today
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text
               style={[
-                styles.statNumber,
-                {
-                  color:
-                    COLORS.success,
-                },
+                styles.hero,
+                isMobile && styles.heroMobile,
               ]}
             >
-              {stats.completed.length}
-            </Text>
+              <View style={styles.heroDecorOne} />
+              <View style={styles.heroDecorTwo} />
 
-            <Text style={styles.statLabel}>
-              Completed
-            </Text>
-          </View>
+              <View style={styles.heroContent}>
+                <View style={styles.eyebrowRow}>
+                  <View style={styles.eyebrowLine} />
 
-          <View style={styles.statCard}>
-            <Text
-              style={[
-                styles.statNumber,
-                {
-                  color:
-                    COLORS.warning,
-                },
-              ]}
-            >
-              {stats.pending.length}
-            </Text>
-
-            <Text style={styles.statLabel}>
-              Pending
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text
-              style={[
-                styles.statNumber,
-                {
-                  color:
-                    COLORS.primary,
-                },
-              ]}
-            >
-              {stats.progress}%
-            </Text>
-
-            <Text style={styles.statLabel}>
-              Progress
-            </Text>
-          </View>
-        </View>
-
-        {/* QUICK QUESTIONS */}
-        <Text style={styles.sectionTitle}>
-          Try asking
-        </Text>
-
-        <View style={styles.quickRow}>
-          {quickQuestions.map(
-            (question) => (
-              <Pressable
-                key={question}
-                style={({ pressed }) => [
-                  styles.quickButton,
-                  pressed &&
-                    styles.quickButtonPressed,
-                ]}
-                onPress={() => {
-                  void askAI(question);
-                }}
-                disabled={asking}
-              >
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={15}
-                  color={
-                    COLORS.primary
-                  }
-                />
+                  <Text style={styles.eyebrow}>
+                    PRODUCTIVITY COMPANION
+                  </Text>
+                </View>
 
                 <Text
-                  style={styles.quickText}
+                  style={[
+                    styles.heroTitle,
+                    isMobile &&
+                      styles.heroTitleMobile,
+                  ]}
                 >
-                  {question}
+                  AI Assist
                 </Text>
-              </Pressable>
-            )
-          )}
-        </View>
 
-        {/* CHAT */}
-        <View style={styles.chatCard}>
-          {messages.length > 0 && (
-            <View style={styles.messages}>
-              {messages.map((item) => {
-                const isUser =
-                  item.role === "user";
+                <Text
+                  style={[
+                    styles.heroSubtitle,
+                    isMobile &&
+                      styles.heroSubtitleMobile,
+                  ]}
+                >
+                  Think clearly. Prioritize what
+                  matters. Turn your plans into
+                  practical next steps.
+                </Text>
 
-                return (
-                  <View
-                    key={item.id}
-                    style={[
-                      styles.messageRow,
-                      isUser &&
-                        styles.userMessageRow,
-                    ]}
-                  >
-                    {!isUser && (
-                      <View
-                        style={
-                          styles.messageIcon
-                        }
-                      >
+                <View style={styles.heroBottom}>
+                  <View style={styles.readyBadge}>
+                    <View
+                      style={styles.readyDot}
+                    />
+
+                    <Text
+                      style={styles.readyText}
+                    >
+                      AI READY
+                    </Text>
+                  </View>
+
+                  <Text style={styles.heroContext}>
+                    Connected to your TaskFlow
+                    workspace
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.heroSymbol}>
+                <Ionicons
+                  name="sparkles"
+                  size={56}
+                  color={COLORS.orange}
+                />
+              </View>
+            </View>
+
+            {/* CONTENT */}
+            <View
+              style={[
+                styles.layout,
+                isDesktop &&
+                  styles.layoutDesktop,
+              ]}
+            >
+              {/* CHAT */}
+              <View
+                style={[
+                  styles.chatColumn,
+                  isDesktop &&
+                    styles.chatColumnDesktop,
+                ]}
+              >
+                <View style={styles.chatCard}>
+                  <View style={styles.chatHeader}>
+                    <View style={styles.chatIdentity}>
+                      <View style={styles.aiAvatar}>
                         <Ionicons
-                          name="sparkles-outline"
-                          size={17}
+                          name="sparkles"
+                          size={18}
                           color={
-                            COLORS.primary
+                            COLORS.orange
                           }
                         />
                       </View>
+
+                      <View>
+                        <Text
+                          style={styles.chatTitle}
+                        >
+                          TaskFlow AI
+                        </Text>
+
+                        <View
+                          style={
+                            styles.onlineRow
+                          }
+                        >
+                          <View
+                            style={
+                              styles.onlineDot
+                            }
+                          />
+
+                          <Text
+                            style={
+                              styles.chatSubtitle
+                            }
+                          >
+                            Productivity
+                            companion
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.chatStatus}>
+                      {loadingContext ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={
+                            COLORS.orange
+                          }
+                        />
+                      ) : (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={17}
+                          color={
+                            COLORS.success
+                          }
+                        />
+                      )}
+                    </View>
+                  </View>
+
+                  <ScrollView
+                    style={
+                      styles.messagesScroll
+                    }
+                    contentContainerStyle={
+                      styles.messagesArea
+                    }
+                    showsVerticalScrollIndicator={
+                      false
+                    }
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {messages.map(
+                      (message) => (
+                        <View
+                          key={message.id}
+                          style={[
+                            styles.messageRow,
+                            message.role ===
+                              "user" &&
+                              styles.messageRowUser,
+                          ]}
+                        >
+                          {message.role ===
+                            "assistant" && (
+                            <View
+                              style={
+                                styles.messageAvatar
+                              }
+                            >
+                              <Ionicons
+                                name="sparkles"
+                                size={12}
+                                color={
+                                  COLORS.orange
+                                }
+                              />
+                            </View>
+                          )}
+
+                          <View
+                            style={[
+                              styles.messageBubble,
+                              message.role ===
+                                "user"
+                                ? styles.userBubble
+                                : styles.assistantBubble,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.messageText,
+                                message.role ===
+                                  "user" &&
+                                  styles.userMessageText,
+                              ]}
+                            >
+                              {message.text}
+                            </Text>
+                          </View>
+                        </View>
+                      ),
                     )}
 
+                    {sending && (
+                      <View
+                        style={styles.messageRow}
+                      >
+                        <View
+                          style={
+                            styles.messageAvatar
+                          }
+                        >
+                          <Ionicons
+                            name="sparkles"
+                            size={12}
+                            color={
+                              COLORS.orange
+                            }
+                          />
+                        </View>
+
+                        <View
+                          style={
+                            styles.typingBubble
+                          }
+                        >
+                          <ActivityIndicator
+                            size="small"
+                            color={
+                              COLORS.orange
+                            }
+                          />
+
+                          <Text
+                            style={
+                              styles.typingText
+                            }
+                          >
+                            Thinking...
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </ScrollView>
+
+                  {/* QUICK PROMPTS */}
+                  <View
+                    style={
+                      styles.promptSection
+                    }
+                  >
                     <View
-                      style={[
-                        styles.messageBubble,
-                        isUser
-                          ? styles.userBubble
-                          : styles.assistantBubble,
+                      style={
+                        styles.promptHeader
+                      }
+                    >
+                      <View>
+                        <Text
+                          style={
+                            styles.promptLabel
+                          }
+                        >
+                          QUICK PROMPTS
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.promptHint
+                          }
+                        >
+                          Start with a question
+                        </Text>
+                      </View>
+
+                      <Ionicons
+                        name="arrow-forward"
+                        size={16}
+                        color={
+                          COLORS.lightMuted
+                        }
+                      />
+                    </View>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={
+                        false
+                      }
+                      contentContainerStyle={
+                        styles.promptList
+                      }
+                    >
+                      {STARTER_PROMPTS.map(
+                        (prompt) => (
+                          <Pressable
+                            key={prompt}
+                            onPress={() =>
+                              void sendMessage(
+                                prompt,
+                              )
+                            }
+                            disabled={sending}
+                            style={({
+                              pressed,
+                            }) => [
+                              styles.promptChip,
+                              pressed &&
+                                styles.pressed,
+                              sending &&
+                                styles.promptDisabled,
+                            ]}
+                          >
+                            <View
+                              style={
+                                styles.promptIcon
+                              }
+                            >
+                              <Ionicons
+                                name="sparkles-outline"
+                                size={13}
+                                color={
+                                  COLORS.orange
+                                }
+                              />
+                            </View>
+
+                            <Text
+                              style={
+                                styles.promptText
+                              }
+                            >
+                              {prompt}
+                            </Text>
+                          </Pressable>
+                        ),
+                      )}
+                    </ScrollView>
+                  </View>
+
+                  {/* COMPOSER */}
+                  <View
+                    style={styles.composer}
+                  >
+                    <View
+                      style={
+                        styles.inputShell
+                      }
+                    >
+                      <TextInput
+                        value={draft}
+                        onChangeText={
+                          setDraft
+                        }
+                        placeholder="Ask TaskFlow AI anything..."
+                        placeholderTextColor={
+                          COLORS.lightMuted
+                        }
+                        style={
+                          styles.composerInput
+                        }
+                        multiline
+                        maxLength={1000}
+                        editable={!sending}
+                      />
+
+                      <Text
+                        style={
+                          styles.characterCount
+                        }
+                      >
+                        {draft.length}/1000
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      onPress={() =>
+                        void sendMessage()
+                      }
+                      disabled={
+                        !draft.trim() ||
+                        sending
+                      }
+                      style={({
+                        pressed,
+                      }) => [
+                        styles.sendButton,
+                        (!draft.trim() ||
+                          sending) &&
+                          styles.sendButtonDisabled,
+                        pressed &&
+                          draft.trim() &&
+                          !sending &&
+                          styles.pressed,
                       ]}
                     >
+                      {sending ? (
+                        <ActivityIndicator
+                          size="small"
+                          color="#FFFFFF"
+                        />
+                      ) : (
+                        <Ionicons
+                          name="arrow-up"
+                          size={19}
+                          color="#FFFFFF"
+                        />
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+
+              {/* RIGHT PANEL */}
+              <View
+                style={[
+                  styles.sideColumn,
+                  isDesktop &&
+                    styles.sideColumnDesktop,
+                ]}
+              >
+                <View
+                  style={styles.contextCard}
+                >
+                  <View
+                    style={
+                      styles.sectionEyebrow
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.sectionEyebrowText
+                      }
+                    >
+                      WORKSPACE
+                    </Text>
+                  </View>
+
+                  <View
+                    style={
+                      styles.contextHeading
+                    }
+                  >
+                    <View
+                      style={
+                        styles.contextIcon
+                      }
+                    >
+                      <Ionicons
+                        name="analytics-outline"
+                        size={19}
+                        color={
+                          COLORS.orange
+                        }
+                      />
+                    </View>
+
+                    <View
+                      style={{
+                        flex: 1,
+                      }}
+                    >
                       <Text
-                        style={[
-                          styles.messageText,
-                          isUser &&
-                            styles.userMessageText,
-                        ]}
+                        style={
+                          styles.contextTitle
+                        }
                       >
-                        {item.content}
+                        Your task context
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.contextSubtitle
+                        }
+                      >
+                        Live workspace overview
                       </Text>
                     </View>
                   </View>
-                );
-              })}
-            </View>
-          )}
 
-          {asking && (
-            <View style={styles.typingRow}>
-              <View
-                style={styles.messageIcon}
-              >
-                <Ionicons
-                  name="sparkles-outline"
-                  size={17}
-                  color={COLORS.primary}
-                />
-              </View>
+                  <View
+                    style={
+                      styles.metricsGrid
+                    }
+                  >
+                    <Metric
+                      label="TOTAL"
+                      value={
+                        taskSummary.total
+                      }
+                    />
 
-              <View
-                style={
-                  styles.typingBubble
-                }
-              >
-                <ActivityIndicator
-                  size="small"
-                  color={COLORS.primary}
-                />
+                    <Metric
+                      label="OPEN"
+                      value={
+                        taskSummary.open
+                      }
+                    />
 
-                <Text
+                    <Metric
+                      label="DONE"
+                      value={
+                        taskSummary.completed
+                      }
+                    />
+                  </View>
+
+                  <View
+                    style={
+                      styles.contextDivider
+                    }
+                  />
+
+                  <Pressable
+                    onPress={() =>
+                      router.push(
+                        "/tasks" as never,
+                      )
+                    }
+                    style={({
+                      pressed,
+                    }) => [
+                      styles.contextAction,
+                      pressed &&
+                        styles.pressed,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        styles.contextActionText
+                      }
+                    >
+                      REVIEW YOUR TASKS
+                    </Text>
+
+                    <Ionicons
+                      name="arrow-forward"
+                      size={16}
+                      color={
+                        COLORS.orange
+                      }
+                    />
+                  </Pressable>
+                </View>
+
+                <View
+                  style={styles.tipsCard}
+                >
+                  <View
+                    style={
+                      styles.cardEyebrowRow
+                    }
+                  >
+                    <View
+                      style={
+                        styles.goldLine
+                      }
+                    />
+
+                    <Text
+                      style={
+                        styles.cardEyebrow
+                      }
+                    >
+                      GET BETTER RESULTS
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={styles.tipsTitle}
+                  >
+                    Ask with intention.
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.tipsDescription
+                    }
+                  >
+                    The more specific your
+                    question, the more useful
+                    your planning support can
+                    be.
+                  </Text>
+
+                  <Tip text="Turn a busy day into a simple priority order." />
+
+                  <Tip text="Summarize your open tasks before you start working." />
+
+                  <Tip text="Break a large task into smaller next actions." />
+
+                  <Tip
+                    text="Review overdue work and decide what to reschedule."
+                    last
+                  />
+                </View>
+
+                <View
                   style={
-                    styles.typingText
+                    styles.capabilityCard
                   }
                 >
-                  Thinking...
-                </Text>
+                  <View
+                    style={
+                      styles.cardEyebrowRow
+                    }
+                  >
+                    <View
+                      style={styles.orangeLine}
+                    />
+
+                    <Text
+                      style={
+                        styles.cardEyebrow
+                      }
+                    >
+                      AI CAPABILITIES
+                    </Text>
+                  </View>
+
+                  <Capability
+                    icon="calendar-outline"
+                    text="Daily planning"
+                  />
+
+                  <Capability
+                    icon="flag-outline"
+                    text="Task prioritization"
+                  />
+
+                  <Capability
+                    icon="time-outline"
+                    text="Schedule review"
+                  />
+
+                  <Capability
+                    icon="trending-up-outline"
+                    text="Productivity insights"
+                    last
+                  />
+                </View>
               </View>
             </View>
-          )}
 
-          {/* INPUT */}
-          <View style={styles.inputRow}>
-            <TextInput
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Ask me anything..."
-              placeholderTextColor="#9AA4B2"
-              style={styles.input}
-              returnKeyType="send"
-              onSubmitEditing={() =>
-                void askAI()
+            <View
+              style={styles.footer}
+            >
+              <View
+                style={styles.footerLine}
+              />
+
+              <Text
+                style={styles.footerTitle}
+              >
+                TASKFLOW AI ASSIST
+              </Text>
+
+              <Text
+                style={styles.footerText}
+              >
+                Plan clearly. Prioritize what
+                matters. Keep moving.
+              </Text>
+            </View>
+          </ScrollView>
+        </View>
+
+        <MobileDrawer
+          visible={drawerOpen}
+          displayName={displayName}
+          onClose={() =>
+            setDrawerOpen(false)
+          }
+          onNavigate={goTo}
+        />
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+function TopNavigation({
+  isDesktop,
+  displayName,
+  onMenu,
+}: {
+  isDesktop: boolean;
+  displayName?: string | null;
+  onMenu: () => void;
+}) {
+  const desktopItems = NAV_ITEMS.slice(
+    0,
+    7,
+  );
+
+  return (
+    <View
+      style={[
+        styles.topBar,
+        isDesktop &&
+          styles.topBarDesktop,
+      ]}
+    >
+      {!isDesktop && (
+        <Pressable
+          onPress={onMenu}
+          style={({ pressed }) => [
+            styles.mobileMenuButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="menu-outline"
+            size={23}
+            color="#FFFFFF"
+          />
+        </Pressable>
+      )}
+
+      <Pressable
+        onPress={() =>
+          router.push("/" as never)
+        }
+        style={styles.topBrand}
+      >
+        <View style={styles.topLogo}>
+          <Ionicons
+            name="checkmark"
+            size={18}
+            color={COLORS.navy}
+          />
+        </View>
+
+        <Text style={styles.topBrandText}>
+          TaskFlow
+        </Text>
+      </Pressable>
+
+      {isDesktop && (
+        <View
+          style={styles.desktopNavigation}
+        >
+          {desktopItems.map((item) => {
+            const active =
+              item.label ===
+              "AI Assist";
+
+            return (
+              <Pressable
+                key={item.label}
+                onPress={() =>
+                  router.push(
+                    item.route as never,
+                  )
+                }
+                style={({ pressed }) => [
+                  styles.topNavItem,
+                  active &&
+                    styles.topNavItemActive,
+                  pressed &&
+                    styles.pressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.topNavText,
+                    active &&
+                      styles.topNavTextActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      {isDesktop && (
+        <View
+          style={styles.topSearch}
+        >
+          <Ionicons
+            name="search-outline"
+            size={17}
+            color="#B8C4D3"
+          />
+
+          <TextInput
+            placeholder="Search..."
+            placeholderTextColor="#9AAABD"
+            style={
+              styles.topSearchInput
+            }
+          />
+
+          <Text
+            style={
+              styles.topSearchShortcut
+            }
+          >
+            /
+          </Text>
+        </View>
+      )}
+
+      <View
+        style={styles.topActions}
+      >
+        <Pressable
+          onPress={() =>
+            router.push(
+              "/ai-assist" as never,
+            )
+          }
+          style={({ pressed }) => [
+            styles.topAction,
+            pressed &&
+              styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="sparkles-outline"
+            size={18}
+            color={COLORS.orange}
+          />
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.topAction,
+            pressed &&
+              styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="notifications-outline"
+            size={18}
+            color="#FFFFFF"
+          />
+
+          <View
+            style={
+              styles.notificationDot
+            }
+          />
+        </Pressable>
+
+        <Pressable
+          onPress={() =>
+            router.push(
+              "/settings" as never,
+            )
+          }
+          style={styles.topAvatar}
+        >
+          <Text
+            style={styles.topAvatarText}
+          >
+            {(displayName || "N")
+              .charAt(0)
+              .toUpperCase()}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function MobileDrawer({
+  visible,
+  displayName,
+  onClose,
+  onNavigate,
+}: {
+  visible: boolean;
+  displayName?: string | null;
+  onClose: () => void;
+  onNavigate: (route: string) => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={styles.drawerOverlay}
+      >
+        <Pressable
+          style={
+            styles.drawerBackdrop
+          }
+          onPress={onClose}
+        />
+
+        <View style={styles.drawer}>
+          <View
+            style={styles.drawerHeader}
+          >
+            <Pressable
+              onPress={() =>
+                onNavigate("/")
               }
-              editable={!asking}
-              multiline
-            />
+              style={styles.brand}
+            >
+              <View
+                style={styles.drawerLogo}
+              >
+                <Ionicons
+                  name="checkmark"
+                  size={19}
+                  color={COLORS.navy}
+                />
+              </View>
+
+              <Text
+                style={styles.drawerBrandText}
+              >
+                TaskFlow
+              </Text>
+            </Pressable>
 
             <Pressable
+              onPress={onClose}
               style={({ pressed }) => [
-                styles.send,
+                styles.drawerClose,
                 pressed &&
-                  styles.sendPressed,
-                (!message.trim() ||
-                  asking) &&
-                  styles.sendDisabled,
+                  styles.pressed,
               ]}
-              onPress={() =>
-                void askAI()
-              }
-              disabled={
-                !message.trim() ||
-                asking
-              }
             >
-              {asking ? (
-                <ActivityIndicator
-                  color="#FFFFFF"
-                  size="small"
-                />
-              ) : (
-                <Ionicons
-                  name="arrow-up"
-                  size={20}
-                  color="#FFFFFF"
-                />
-              )}
+              <Ionicons
+                name="close"
+                size={21}
+                color={COLORS.text}
+              />
             </Pressable>
           </View>
 
-          {messages.length === 0 &&
-            !asking && (
-              <View
-                style={styles.emptyAnswer}
+          <ScrollView
+            showsVerticalScrollIndicator={
+              false
+            }
+            contentContainerStyle={
+              styles.drawerContent
+            }
+          >
+            <Text
+              style={styles.navLabel}
+            >
+              WORKSPACE
+            </Text>
+
+            {NAV_ITEMS.slice(
+              0,
+              7,
+            ).map((item) => (
+              <DrawerItem
+                key={item.label}
+                item={item}
+                active={
+                  item.label ===
+                  "AI Assist"
+                }
+                onPress={() =>
+                  onNavigate(
+                    item.route,
+                  )
+                }
+              />
+            ))}
+
+            <Text
+              style={[
+                styles.navLabel,
+                styles.navLabelSecond,
+              ]}
+            >
+              OTHER
+            </Text>
+
+            {NAV_ITEMS.slice(
+              7,
+            ).map((item) => (
+              <DrawerItem
+                key={item.label}
+                item={item}
+                active={false}
+                onPress={() =>
+                  onNavigate(
+                    item.route,
+                  )
+                }
+              />
+            ))}
+          </ScrollView>
+
+          <Pressable
+            onPress={() =>
+              onNavigate(
+                "/settings",
+              )
+            }
+            style={styles.drawerProfile}
+          >
+            <View
+              style={styles.profileAvatar}
+            >
+              <Text
+                style={
+                  styles.profileAvatarText
+                }
               >
-                <Ionicons
-                  name="sparkles-outline"
-                  size={22}
-                  color="#A7B1C2"
-                />
+                {(displayName || "N")
+                  .charAt(0)
+                  .toUpperCase()}
+              </Text>
+            </View>
 
-                <Text
-                  style={styles.placeholder}
-                >
-                  Ask a question and your AI
-                  assistant will respond here.
-                </Text>
-              </View>
-            )}
-        </View>
+            <View
+              style={{ flex: 1 }}
+            >
+              <Text
+                style={
+                  styles.profileName
+                }
+                numberOfLines={1}
+              >
+                {displayName ||
+                  "Your profile"}
+              </Text>
 
-        {/* INFO */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoIcon}>
+              <Text
+                style={
+                  styles.profileSub
+                }
+              >
+                Account settings
+              </Text>
+            </View>
+
             <Ionicons
-              name="shield-checkmark-outline"
-              size={20}
-              color={COLORS.primary}
+              name="chevron-forward"
+              size={17}
+              color={
+                COLORS.lightMuted
+              }
             />
-          </View>
-
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>
-              TaskFlow AI
-            </Text>
-
-            <Text style={styles.infoText}>
-              General questions are answered by
-              AI. When you ask about your TaskFlow
-              schedule, your current tasks are
-              provided as context.
-            </Text>
-          </View>
+          </Pressable>
         </View>
-      </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function DrawerItem({
+  item,
+  active,
+  onPress,
+}: {
+  item: (typeof NAV_ITEMS)[number];
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.drawerItem,
+        active &&
+          styles.drawerItemActive,
+        pressed &&
+          styles.pressed,
+      ]}
+    >
+      <Ionicons
+        name={
+          item.icon as keyof typeof Ionicons.glyphMap
+        }
+        size={18}
+        color={
+          active
+            ? COLORS.orange
+            : COLORS.muted
+        }
+      />
+
+      <Text
+        style={[
+          styles.drawerItemText,
+          active &&
+            styles.drawerItemTextActive,
+        ]}
+      >
+        {item.label}
+      </Text>
+
+      {active && (
+        <View
+          style={styles.drawerActiveDot}
+        />
+      )}
+    </Pressable>
+  );
+}
+
+function Metric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <View style={styles.metricCard}>
+      <Text
+        style={styles.metricValue}
+      >
+        {value}
+      </Text>
+
+      <Text
+        style={styles.metricLabel}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function Tip({
+  text,
+  last = false,
+}: {
+  text: string;
+  last?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.tipRow,
+        last &&
+          styles.tipRowLast,
+      ]}
+    >
+      <View
+        style={styles.tipBullet}
+      />
+
+      <Text
+        style={styles.tipText}
+      >
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+function Capability({
+  icon,
+  text,
+  last = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  text: string;
+  last?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.capabilityRow,
+        last &&
+          styles.capabilityRowLast,
+      ]}
+    >
+      <View
+        style={
+          styles.capabilityIcon
+        }
+      >
+        <Ionicons
+          name={icon}
+          size={15}
+          color={COLORS.orange}
+        />
+      </View>
+
+      <Text
+        style={
+          styles.capabilityText
+        }
+      >
+        {text}
+      </Text>
+
+      <Ionicons
+        name="checkmark-circle"
+        size={15}
+        color={COLORS.success}
+      />
     </View>
   );
 }
@@ -711,367 +1571,1043 @@ const styles = StyleSheet.create({
       COLORS.background,
   },
 
-  content: {
-    padding: 28,
-    paddingBottom: 60,
-    maxWidth: 1000,
-    width: "100%",
-    alignSelf: "center",
+  main: {
+    flex: 1,
+    minWidth: 0,
   },
 
-  header: {
+  /* ---------------- TOP NAV ---------------- */
+
+  topBar: {
+    height: 66,
+    backgroundColor: COLORS.navy,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    marginBottom: 25,
+    gap: 12,
+    zIndex: 10,
   },
 
-  headerText: {
-    flex: 1,
+  topBarDesktop: {
+    paddingHorizontal: 28,
   },
 
-  back: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+  topBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+
+  topLogo: {
+    width: 34,
+    height: 34,
     backgroundColor:
-      COLORS.card,
-    borderWidth: 1,
-    borderColor:
-      COLORS.border,
+      COLORS.orange,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 7,
   },
 
-  title: {
-    fontSize: 28,
+  topBrandText: {
+    color: COLORS.white,
+    fontSize: 18,
     fontWeight: "800",
-    color: COLORS.text,
+    letterSpacing: -0.4,
   },
 
-  subtitle: {
-    marginTop: 3,
-    fontSize: 14,
-    color: COLORS.muted,
-  },
-
-  onlineBadge: {
-    flexDirection: "row",
+  mobileMenuButton: {
+    width: 38,
+    height: 38,
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor:
-      "#ECFDF3",
+    justifyContent: "center",
     borderWidth: 1,
     borderColor:
-      "#D1FAE5",
+      "rgba(255,255,255,0.14)",
   },
 
-  onlineDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+  desktopNavigation: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 34,
+    gap: 2,
+  },
+
+  topNavItem: {
+    height: 66,
+    paddingHorizontal: 11,
+    justifyContent: "center",
+    borderBottomWidth: 2,
+    borderBottomColor:
+      "transparent",
+  },
+
+  topNavItemActive: {
+    borderBottomColor:
+      COLORS.orange,
+  },
+
+  topNavText: {
+    color: "#B7C3D2",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  topNavTextActive: {
+    color: COLORS.white,
+  },
+
+  topSearch: {
+    marginLeft: "auto",
+    width: 190,
+    height: 36,
+    borderWidth: 1,
+    borderColor:
+      "rgba(255,255,255,0.14)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    gap: 7,
+  },
+
+  topSearchInput: {
+    flex: 1,
+    color: COLORS.white,
+    fontSize: 11,
+    outlineStyle: "none",
+  } as any,
+
+  topSearchShortcut: {
+    color: "#9BA9BA",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  topActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginLeft: "auto",
+  },
+
+  topAction: {
+    width: 35,
+    height: 35,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+
+  notificationDot: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor:
-      COLORS.success,
+      COLORS.orange,
   },
 
-  onlineText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.success,
+  topAvatar: {
+    width: 35,
+    height: 35,
+    backgroundColor:
+      COLORS.orange,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 2,
+    borderRadius: 7,
   },
+
+  topAvatarText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  /* ---------------- PAGE ---------------- */
+
+  page: {
+    width: "100%",
+    maxWidth: 1360,
+    alignSelf: "center",
+    padding: 16,
+    paddingBottom: 50,
+  },
+
+  pageDesktop: {
+    paddingHorizontal: 28,
+    paddingTop: 26,
+  },
+
+  /* ---------------- HERO ---------------- */
 
   hero: {
-    padding: 25,
-    borderRadius: 19,
+    minHeight: 235,
     backgroundColor:
-      COLORS.primary,
+      COLORS.navyDark,
+    overflow: "hidden",
+    position: "relative",
+    paddingHorizontal: 30,
+    paddingVertical: 27,
+    justifyContent: "center",
+    marginBottom: 18,
   },
 
-  sparkle: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    backgroundColor:
-      "rgba(255,255,255,0.18)",
+  heroMobile: {
+    minHeight: 260,
+    paddingHorizontal: 21,
+    paddingVertical: 25,
+  },
+
+  heroContent: {
+    maxWidth: 760,
+    zIndex: 2,
+  },
+
+  heroDecorOne: {
+    position: "absolute",
+    width: 290,
+    height: 290,
+    borderRadius: 145,
+    right: -85,
+    top: -140,
+    borderWidth: 1,
+    borderColor:
+      "rgba(255,255,255,0.08)",
+  },
+
+  heroDecorTwo: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    right: 70,
+    bottom: -120,
+    borderWidth: 1,
+    borderColor:
+      "rgba(255,122,0,0.16)",
+  },
+
+  eyebrowRow: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 9,
+    marginBottom: 10,
+  },
+
+  eyebrowLine: {
+    width: 26,
+    height: 2,
+    backgroundColor:
+      COLORS.orange,
+  },
+
+  eyebrow: {
+    color: "#AEBCCE",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.7,
   },
 
   heroTitle: {
-    marginTop: 17,
-    fontSize: 24,
+    color: COLORS.white,
+    fontSize: 40,
+    lineHeight: 46,
     fontWeight: "800",
-    color: "#FFFFFF",
+    letterSpacing: -1.1,
   },
 
-  heroText: {
-    marginTop: 6,
-    color: "#E8F4FF",
+  heroTitleMobile: {
+    fontSize: 32,
+    lineHeight: 38,
+  },
+
+  heroSubtitle: {
+    maxWidth: 610,
+    color: "#B9C5D4",
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: 7,
+  },
+
+  heroSubtitleMobile: {
     fontSize: 13,
     lineHeight: 20,
   },
 
-  statsRow: {
+  heroBottom: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 18,
-  },
-
-  statCard: {
-    flex: 1,
-    minWidth: 70,
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    backgroundColor:
-      COLORS.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor:
-      COLORS.border,
     alignItems: "center",
-  },
-
-  statNumber: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: COLORS.text,
-  },
-
-  statLabel: {
-    marginTop: 3,
-    fontSize: 10,
-    fontWeight: "600",
-    color: COLORS.muted,
-  },
-
-  sectionTitle: {
-    marginTop: 24,
-    marginBottom: 10,
-    fontSize: 14,
-    fontWeight: "800",
-    color: COLORS.text,
-  },
-
-  quickRow: {
-    flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 18,
+    gap: 12,
+    marginTop: 19,
   },
 
-  quickButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-    borderRadius: 11,
-    backgroundColor:
-      COLORS.card,
+  readyBadge: {
+    height: 28,
+    paddingHorizontal: 9,
     borderWidth: 1,
     borderColor:
-      COLORS.border,
+      "rgba(255,122,0,0.35)",
+    backgroundColor:
+      "rgba(255,122,0,0.10)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
 
-  quickButtonPressed: {
-    opacity: 0.7,
+  readyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor:
+      COLORS.orange,
+  },
+
+  readyText: {
+    color: COLORS.orange,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+
+  heroContext: {
+    color: "#8495A9",
+    fontSize: 10,
+  },
+
+  heroSymbol: {
+    position: "absolute",
+    right: 65,
+    top: 77,
+    opacity: 0.85,
     transform: [
       {
-        scale: 0.98,
+        rotate: "-12deg",
       },
     ],
   },
 
-  quickText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.muted,
+  /* ---------------- LAYOUT ---------------- */
+
+  layout: {
+    gap: 17,
   },
 
+  layoutDesktop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  chatColumn: {
+    minWidth: 0,
+    flex: 1,
+  },
+
+  chatColumnDesktop: {
+    minWidth: 0,
+  },
+
+  sideColumn: {
+    gap: 15,
+  },
+
+  sideColumnDesktop: {
+    width: 320,
+  },
+
+  /* ---------------- CHAT ---------------- */
+
   chatCard: {
-    padding: 18,
     backgroundColor:
-      COLORS.card,
+      COLORS.white,
     borderWidth: 1,
     borderColor:
       COLORS.border,
-    borderRadius: 17,
+    overflow: "hidden",
   },
 
-  messages: {
+  chatHeader: {
+    minHeight: 72,
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    borderBottomColor:
+      COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  chatIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+  },
+
+  aiAvatar: {
+    width: 42,
+    height: 42,
+    backgroundColor:
+      COLORS.orangeSoft,
+    borderWidth: 1,
+    borderColor:
+      "#FFD5B5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  chatTitle: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  onlineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 3,
+  },
+
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor:
+      COLORS.success,
+  },
+
+  chatSubtitle: {
+    color: COLORS.muted,
+    fontSize: 10,
+  },
+
+  chatStatus: {
+    width: 30,
+    alignItems: "center",
+  },
+
+  messagesScroll: {
+    minHeight: 360,
+    maxHeight: 510,
+  },
+
+  messagesArea: {
+    padding: 18,
     gap: 14,
-    marginBottom: 17,
   },
 
   messageRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 9,
+    gap: 8,
+    maxWidth: 760,
   },
 
-  userMessageRow: {
-    justifyContent:
-      "flex-end",
+  messageRowUser: {
+    alignSelf: "flex-end",
+    flexDirection: "row-reverse",
   },
 
-  messageIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+  messageAvatar: {
+    width: 27,
+    height: 27,
     backgroundColor:
-      COLORS.primaryLight,
+      COLORS.orangeSoft,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 2,
   },
 
   messageBubble: {
     maxWidth: "82%",
     paddingHorizontal: 14,
     paddingVertical: 11,
-    borderRadius: 14,
   },
 
   assistantBubble: {
     backgroundColor:
-      COLORS.primaryLight,
+      COLORS.soft,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
   },
 
   userBubble: {
     backgroundColor:
-      COLORS.primary,
+      COLORS.navy,
   },
 
   messageText: {
+    color: COLORS.text,
     fontSize: 13,
     lineHeight: 20,
-    color: COLORS.text,
   },
 
   userMessageText: {
-    color: "#FFFFFF",
-  },
-
-  typingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    marginBottom: 16,
+    color: COLORS.white,
   },
 
   typingBubble: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    backgroundColor:
+      COLORS.soft,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: 14,
-    backgroundColor:
-      COLORS.primaryLight,
+    gap: 8,
   },
 
   typingText: {
-    fontSize: 12,
     color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: "700",
   },
 
-  inputRow: {
+  /* ---------------- PROMPTS ---------------- */
+
+  promptSection: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor:
+      COLORS.border,
+  },
+
+  promptHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 9,
+  },
+
+  promptLabel: {
+    color: COLORS.text,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+  },
+
+  promptHint: {
+    color: COLORS.lightMuted,
+    fontSize: 9,
+    marginTop: 3,
+  },
+
+  promptList: {
+    gap: 8,
+  },
+
+  promptChip: {
+    minHeight: 39,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
+    backgroundColor:
+      COLORS.white,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  promptIcon: {
+    width: 24,
+    height: 24,
+    backgroundColor:
+      COLORS.orangeSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  promptText: {
+    color: COLORS.text,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  promptDisabled: {
+    opacity: 0.5,
+  },
+
+  /* ---------------- COMPOSER ---------------- */
+
+  composer: {
+    minHeight: 75,
+    padding: 11,
+    borderTopWidth: 1,
+    borderTopColor:
+      COLORS.border,
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 9,
   },
 
-  input: {
+  inputShell: {
     flex: 1,
-    minHeight: 48,
-    maxHeight: 110,
-    borderRadius: 12,
+    minHeight: 45,
+    maxHeight: 108,
+    borderWidth: 1,
+    borderColor:
+      COLORS.borderStrong,
     backgroundColor:
-      COLORS.background,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+      COLORS.white,
+    position: "relative",
+  },
+
+  composerInput: {
+    minHeight: 43,
+    maxHeight: 92,
     color: COLORS.text,
     fontSize: 13,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 21,
     outlineStyle: "none",
   } as any,
 
-  send: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
+  characterCount: {
+    position: "absolute",
+    right: 9,
+    bottom: 5,
+    color: COLORS.lightMuted,
+    fontSize: 8,
+  },
+
+  sendButton: {
+    width: 44,
+    height: 44,
     backgroundColor:
-      COLORS.primary,
+      COLORS.orange,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  sendPressed: {
-    opacity: 0.8,
-    transform: [
-      {
-        scale: 0.96,
-      },
-    ],
+  sendButtonDisabled: {
+    opacity: 0.4,
   },
 
-  sendDisabled: {
-    opacity: 0.5,
+  /* ---------------- CONTEXT CARD ---------------- */
+
+  contextCard: {
+    backgroundColor:
+      COLORS.white,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
+    padding: 18,
   },
 
-  emptyAnswer: {
+  sectionEyebrow: {
+    marginBottom: 13,
+  },
+
+  sectionEyebrowText: {
+    color: COLORS.muted,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.3,
+  },
+
+  contextHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  contextIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor:
+      COLORS.orangeSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  contextTitle: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  contextSubtitle: {
+    color: COLORS.muted,
+    fontSize: 10,
+    marginTop: 3,
+  },
+
+  metricsGrid: {
+    flexDirection: "row",
+    gap: 7,
     marginTop: 17,
-    paddingVertical: 12,
+  },
+
+  metricCard: {
+    flex: 1,
+    backgroundColor:
+      COLORS.background,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+  },
+
+  metricValue: {
+    color: COLORS.navy,
+    fontSize: 20,
+    fontWeight: "800",
+  },
+
+  metricLabel: {
+    color: COLORS.muted,
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    marginTop: 3,
+  },
+
+  contextDivider: {
+    height: 1,
+    backgroundColor:
+      COLORS.border,
+    marginTop: 16,
+  },
+
+  contextAction: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+
+  contextActionText: {
+    color: COLORS.orangeDark,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.9,
+  },
+
+  /* ---------------- TIPS ---------------- */
+
+  tipsCard: {
+    backgroundColor:
+      COLORS.white,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
+    padding: 18,
+  },
+
+  cardEyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  goldLine: {
+    width: 22,
+    height: 2,
+    backgroundColor:
+      COLORS.gold,
+  },
+
+  orangeLine: {
+    width: 22,
+    height: 2,
+    backgroundColor:
+      COLORS.orange,
+  },
+
+  cardEyebrow: {
+    color: COLORS.muted,
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+  },
+
+  tipsTitle: {
+    color: COLORS.navy,
+    fontSize: 19,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    marginTop: 12,
+  },
+
+  tipsDescription: {
+    color: COLORS.muted,
+    fontSize: 10,
+    lineHeight: 16,
+    marginTop: 5,
+    marginBottom: 5,
+  },
+
+  tipRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor:
+      COLORS.border,
+  },
+
+  tipRowLast: {
+    borderBottomWidth: 0,
+  },
+
+  tipBullet: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor:
+      COLORS.orange,
+    marginTop: 5,
+  },
+
+  tipText: {
+    flex: 1,
+    color: COLORS.muted,
+    fontSize: 10,
+    lineHeight: 16,
+  },
+
+  /* ---------------- CAPABILITIES ---------------- */
+
+  capabilityCard: {
+    backgroundColor:
+      COLORS.white,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
+    padding: 18,
+  },
+
+  capabilityRow: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderBottomWidth: 1,
+    borderBottomColor:
+      COLORS.border,
+  },
+
+  capabilityRowLast: {
+    borderBottomWidth: 0,
+  },
+
+  capabilityIcon: {
+    width: 28,
+    height: 28,
+    backgroundColor:
+      COLORS.orangeSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  capabilityText: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  /* ---------------- FOOTER ---------------- */
+
+  footer: {
+    alignItems: "center",
+    marginTop: 28,
+  },
+
+  footerLine: {
+    width: 32,
+    height: 2,
+    backgroundColor:
+      COLORS.orange,
+    marginBottom: 10,
+  },
+
+  footerTitle: {
+    color: COLORS.navy,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+  },
+
+  footerText: {
+    color: COLORS.muted,
+    fontSize: 9,
+    marginTop: 4,
+  },
+
+  /* ---------------- MOBILE DRAWER ---------------- */
+
+  drawerOverlay: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor:
+      "rgba(7, 22, 42, 0.52)",
+  },
+
+  drawerBackdrop: {
+    flex: 1,
+  },
+
+  drawer: {
+    width: 292,
+    maxWidth: "86%",
+    backgroundColor:
+      COLORS.white,
+    paddingTop: 20,
+    paddingHorizontal: 15,
+    paddingBottom: 15,
+    justifyContent: "space-between",
+    shadowColor: "#000000",
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: {
+      width: -5,
+      height: 0,
+    },
+    elevation: 14,
+  },
+
+  drawerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent:
+      "space-between",
+    paddingHorizontal: 2,
+    marginBottom: 23,
+  },
+
+  brand: {
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
   },
 
-  placeholder: {
-    flex: 1,
-    color: COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-
-  infoCard: {
-    marginTop: 18,
-    padding: 15,
-    borderRadius: 14,
+  drawerLogo: {
+    width: 35,
+    height: 35,
     backgroundColor:
-      COLORS.card,
-    borderWidth: 1,
-    borderColor:
-      COLORS.border,
-    flexDirection: "row",
-    gap: 11,
-  },
-
-  infoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor:
-      COLORS.primaryLight,
+      COLORS.orange,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  infoContent: {
-    flex: 1,
+  drawerBrandText: {
+    color: COLORS.navy,
+    fontSize: 18,
+    fontWeight: "800",
   },
 
-  infoTitle: {
+  drawerClose: {
+    width: 37,
+    height: 37,
+    backgroundColor:
+      COLORS.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  drawerContent: {
+    paddingBottom: 20,
+  },
+
+  navLabel: {
+    color: COLORS.lightMuted,
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    paddingHorizontal: 10,
+    marginBottom: 7,
+  },
+
+  navLabelSecond: {
+    marginTop: 22,
+  },
+
+  drawerItem: {
+    height: 43,
+    paddingHorizontal: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    marginBottom: 3,
+    position: "relative",
+  },
+
+  drawerItemActive: {
+    backgroundColor:
+      COLORS.orangeSoft,
+  },
+
+  drawerItemText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  drawerItemTextActive: {
+    color: COLORS.orangeDark,
+    fontWeight: "800",
+  },
+
+  drawerActiveDot: {
+    position: "absolute",
+    right: 10,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor:
+      COLORS.orange,
+  },
+
+  drawerProfile: {
+    borderTopWidth: 1,
+    borderTopColor:
+      COLORS.border,
+    paddingTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+
+  profileAvatar: {
+    width: 36,
+    height: 36,
+    backgroundColor:
+      COLORS.navy,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  profileAvatarText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  profileName: {
+    color: COLORS.text,
     fontSize: 12,
     fontWeight: "800",
-    color: COLORS.text,
   },
 
-  infoText: {
-    marginTop: 3,
-    fontSize: 11,
-    lineHeight: 17,
+  profileSub: {
     color: COLORS.muted,
+    fontSize: 9,
+    marginTop: 2,
+  },
+
+  pressed: {
+    opacity: 0.75,
   },
 });

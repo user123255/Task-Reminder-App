@@ -3,124 +3,69 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
-} from "react";
+} from 'react';
 
-import type { Session, User } from "@supabase/supabase-js";
+import type { Session, User } from '@supabase/supabase-js';
 
-import { supabase } from "@/utils/supabase";
-
-type UserProfile = {
-  id: string;
-  display_name: string | null;
-  [key: string]: unknown;
-};
+import { supabase } from '@/utils/supabase';
 
 type AuthContextType = {
   session: Session | null;
   loading: boolean;
-  profile: UserProfile | null;
   displayName: string;
-
   refreshProfile: () => Promise<void>;
-
-  updateDisplayName: (
-    name: string
-  ) => Promise<{ error: Error | null }>;
 };
+
+const DEFAULT_DISPLAY_NAME = 'Nyayath';
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
-  profile: null,
-  displayName: "",
-  refreshProfile: async () => {},
-  updateDisplayName: async () => ({
-    error: null,
-  }),
+  displayName: DEFAULT_DISPLAY_NAME,
+  refreshProfile: async () => undefined,
 });
 
-/**
- * Creates a readable name from an email address
- * only when the user has not provided a display name.
- *
- * Example:
- * john.doe@example.com
- * -> John Doe
- */
-function getFallbackDisplayName(
-  email: string | undefined
-): string {
-  if (!email) {
-    return "there";
+function getMetadataDisplayName(user: User | null): string | null {
+  if (!user) {
+    return null;
   }
 
-  const emailName = email
-    .split("@")[0]
-    ?.trim();
+  const metadata = user.user_metadata ?? {};
 
-  if (!emailName) {
-    return "there";
+  const candidates = [
+    metadata.display_name,
+    metadata.full_name,
+    metadata.name,
+    metadata.username,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
   }
 
-  return emailName
-    .replace(/[._-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-    .map(
-      (word) =>
-        word.charAt(0).toUpperCase() +
-        word.slice(1).toLowerCase()
-    )
-    .join(" ");
+  return null;
 }
 
 /**
- * Gets the best available display name.
+ * Gets the display name without querying a column that may not
+ * exist in the profiles table.
  *
- * Priority:
- * 1. profiles.display_name
- * 2. Supabase user metadata full_name
- * 3. Supabase user metadata name
- * 4. Email-derived name
+ * Supabase Auth metadata is used first, followed by the email
+ * username, then the TaskFlow default name.
  */
-function getDisplayName(
-  profile: UserProfile | null,
-  user: User | null
-): string {
-  const profileName =
-    typeof profile?.display_name === "string"
-      ? profile.display_name.trim()
-      : "";
-
-  if (profileName) {
-    return profileName;
+function getUserDisplayName(user: User | null): string {
+  if (!user) {
+    return DEFAULT_DISPLAY_NAME;
   }
 
-  const metadata = user?.user_metadata;
-
-  const fullName =
-    typeof metadata?.full_name === "string"
-      ? metadata.full_name.trim()
-      : "";
-
-  if (fullName) {
-    return fullName;
-  }
-
-  const name =
-    typeof metadata?.name === "string"
-      ? metadata.name.trim()
-      : "";
-
-  if (name) {
-    return name;
-  }
-
-  return getFallbackDisplayName(
-    user?.email
+  return (
+    getMetadataDisplayName(user) ??
+    user.email?.split('@')[0]?.trim() ??
+    DEFAULT_DISPLAY_NAME
   );
 }
 
@@ -129,385 +74,182 @@ export function AuthProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [session, setSession] =
-    useState<Session | null>(null);
-
-  const [profile, setProfile] =
-    useState<UserProfile | null>(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  /**
-   * Load the user's profile from Supabase.
-   */
-  const fetchProfile = useCallback(
-    async (userId: string) => {
-      try {
-        const { data, error } =
-          await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", userId)
-            .maybeSingle();
-
-        if (error) {
-          console.error(
-            "Failed to load user profile:",
-            error
-          );
-
-          setProfile(null);
-          return;
-        }
-
-        setProfile(
-          data as UserProfile | null
-        );
-      } catch (error) {
-        console.error(
-          "Unexpected profile loading error:",
-          error
-        );
-
-        setProfile(null);
-      }
-    },
-    []
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [displayName, setDisplayName] = useState(
+    DEFAULT_DISPLAY_NAME,
   );
 
   /**
-   * Refresh the current user's profile.
+   * Refresh the currently authenticated user's profile information.
+   *
+   * We intentionally use Supabase Auth user metadata here instead
+   * of querying profiles.display_name because that column does not
+   * exist in the current database schema.
    */
-  const refreshProfile =
-    useCallback(async () => {
-      const user = session?.user;
+  const refreshProfile = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-      if (!user) {
-        setProfile(null);
+      if (error) {
+        console.warn(
+          'Could not refresh authenticated user:',
+          error.message,
+        );
         return;
       }
 
-      await fetchProfile(user.id);
-    }, [session, fetchProfile]);
+      if (!user) {
+        setDisplayName(DEFAULT_DISPLAY_NAME);
+        return;
+      }
 
-  /**
-   * Update the display name globally.
-   *
-   * We update Supabase Auth metadata immediately.
-   * This allows every screen using useAuth()
-   * to receive the new name.
-   *
-   * We also update the local profile state immediately
-   * so the UI changes without requiring a reload.
-   */
-  const updateDisplayName =
-    useCallback(
-      async (name: string) => {
-        const cleanedName =
-          name.trim();
-
-        if (!cleanedName) {
-          return {
-            error: new Error(
-              "Display name cannot be empty."
-            ),
-          };
-        }
-
-        const user =
-          session?.user;
-
-        if (!user) {
-          return {
-            error: new Error(
-              "You must be signed in to change your name."
-            ),
-          };
-        }
-
-        try {
-          /**
-           * Update Supabase Auth metadata.
-           */
-          const { data, error } =
-            await supabase.auth.updateUser(
-              {
-                data: {
-                  full_name:
-                    cleanedName,
-                  name: cleanedName,
-                },
-              }
-            );
-
-          if (error) {
-            console.error(
-              "Failed to update display name:",
-              error
-            );
-
-            return {
-              error,
-            };
-          }
-
-          /**
-           * Update the local session immediately.
-           */
-          if (data.user) {
-            setSession((current) => {
-              if (!current) {
-                return current;
-              }
-
-              return {
-                ...current,
-                user: data.user,
-              };
-            });
-          }
-
-          /**
-           * Update the profile state immediately
-           * if a profile already exists.
-           */
-          setProfile((current) => {
-            if (!current) {
-              return current;
-            }
-
-            return {
-              ...current,
-              display_name:
-                cleanedName,
-            };
-          });
-
-          /**
-           * If the profiles table contains a matching
-           * row, keep its display_name synchronized too.
-           *
-           * We do not make this update fatal because
-           * Auth metadata remains the primary fallback.
-           */
-          try {
-            await supabase
-              .from("profiles")
-              .update({
-                display_name:
-                  cleanedName,
-              })
-              .eq("id", user.id);
-          } catch (profileError) {
-            console.warn(
-              "Profile table could not be synchronized:",
-              profileError
-            );
-          }
-
-          return {
-            error: null,
-          };
-        } catch (error) {
-          console.error(
-            "Unexpected display name update error:",
-            error
-          );
-
-          return {
-            error:
-              error instanceof Error
-                ? error
-                : new Error(
-                    "Unable to update display name."
-                  ),
-          };
-        }
-      },
-      [session]
-    );
-
-  /**
-   * The name displayed throughout TaskFlow.
-   */
-  const displayName = getDisplayName(
-    profile,
-    session?.user ?? null
-  );
+      setDisplayName(getUserDisplayName(user));
+    } catch (error) {
+      console.warn(
+        'Unexpected error while refreshing authenticated user:',
+        error,
+      );
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    const restoreSession =
-      async () => {
-        try {
-          const {
-            data: {
-              session:
-                restoredSession,
-            },
-            error,
-          } =
-            await supabase.auth.getSession();
+    /**
+     * Restore the existing Supabase session when the app starts.
+     */
+    const initializeAuth = async () => {
+      try {
+        const {
+          data: { session: currentSession },
+          error,
+        } = await supabase.auth.getSession();
 
-          if (!mounted) {
-            return;
-          }
-
-          if (error) {
-            console.error(
-              "Failed to restore Supabase session:",
-              error
-            );
-
-            setSession(null);
-            setProfile(null);
-            setLoading(false);
-
-            return;
-          }
-
-          setSession(
-            restoredSession
-          );
-
-          if (
-            restoredSession?.user
-          ) {
-            await fetchProfile(
-              restoredSession.user.id
-            );
-          } else {
-            setProfile(null);
-          }
-
-          if (mounted) {
-            setLoading(false);
-          }
-        } catch (error) {
-          if (!mounted) {
-            return;
-          }
-
+        if (error) {
           console.error(
-            "Unexpected authentication error:",
-            error
+            'Failed to restore Supabase session:',
+            error.message,
           );
+        }
 
+        if (!mounted) {
+          return;
+        }
+
+        setSession(currentSession);
+
+        if (currentSession?.user) {
+          setDisplayName(
+            getUserDisplayName(currentSession.user),
+          );
+        } else {
+          setDisplayName(DEFAULT_DISPLAY_NAME);
+        }
+      } catch (error) {
+        console.error(
+          'Failed to initialize authentication:',
+          error,
+        );
+
+        if (mounted) {
           setSession(null);
-          setProfile(null);
+          setDisplayName(DEFAULT_DISPLAY_NAME);
+        }
+      } finally {
+        if (mounted) {
           setLoading(false);
         }
-      };
+      }
+    };
 
+    void initializeAuth();
+
+    /**
+     * Listen for changes made by Supabase Auth.
+     *
+     * This is important for:
+     * - signing in
+     * - signing out
+     * - refreshing tokens
+     * - updating user information
+     * - restoring an existing session
+     */
     const {
-      data: {
-        subscription,
-      },
-    } =
-      supabase.auth.onAuthStateChange(
-        async (
-          event,
-          nextSession
-        ) => {
-          if (!mounted) {
-            return;
-          }
-
-          console.log(
-            "Supabase auth event:",
-            event
-          );
-
-          setSession(nextSession);
-
-          if (!nextSession?.user) {
-            setProfile(null);
-            setLoading(false);
-            return;
-          }
-
-          /**
-           * USER_UPDATED is particularly important here.
-           *
-           * When Settings changes the display name,
-           * Supabase emits USER_UPDATED and we update
-           * the session/profile state.
-           */
-          if (
-            event ===
-            "USER_UPDATED"
-          ) {
-            setTimeout(
-              async () => {
-                if (!mounted) {
-                  return;
-                }
-
-                await fetchProfile(
-                  nextSession.user.id
-                );
-
-                if (mounted) {
-                  setLoading(false);
-                }
-              },
-              0
-            );
-
-            return;
-          }
-
-          /**
-           * Do database work after the auth callback
-           * has completed its internal processing.
-           */
-          setTimeout(
-            async () => {
-              if (!mounted) {
-                return;
-              }
-
-              await fetchProfile(
-                nextSession.user.id
-              );
-
-              if (mounted) {
-                setLoading(false);
-              }
-            },
-            0
-          );
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (event, nextSession) => {
+        if (!mounted) {
+          return;
         }
-      );
 
-    restoreSession();
+        console.log(
+          'AUTH EVENT:',
+          event,
+          'SESSION:',
+          Boolean(nextSession),
+        );
+
+        setSession(nextSession);
+
+        if (nextSession?.user) {
+          setDisplayName(
+            getUserDisplayName(nextSession.user),
+          );
+        } else {
+          setDisplayName(DEFAULT_DISPLAY_NAME);
+        }
+
+        setLoading(false);
+      },
+    );
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, []);
+
+  /**
+   * Keep the displayed name synchronized whenever the
+   * authenticated user changes.
+   */
+  useEffect(() => {
+    if (!session?.user) {
+      setDisplayName(DEFAULT_DISPLAY_NAME);
+      return;
+    }
+
+    setDisplayName(
+      getUserDisplayName(session.user),
+    );
+  }, [session?.user?.id]);
+
+  const value = useMemo<AuthContextType>(
+    () => ({
+      session,
+      loading,
+      displayName,
+      refreshProfile,
+    }),
+    [
+      session,
+      loading,
+      displayName,
+      refreshProfile,
+    ],
+  );
 
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        loading,
-        profile,
-        displayName,
-        refreshProfile,
-        updateDisplayName,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  return useContext(
-    AuthContext
-  );
+  return useContext(AuthContext);
 }
