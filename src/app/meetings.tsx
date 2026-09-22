@@ -751,12 +751,6 @@ export default function MeetingsScreen() {
 
   return (
     <View style={styles.container}>
-      {!isMobile && (
-        <DesktopSidebar
-          onNavigate={navigate}
-          isTablet={isTablet}
-        />
-      )}
 
       <View style={styles.mainArea}>
         <DesktopTopBar
@@ -1286,117 +1280,6 @@ export default function MeetingsScreen() {
   );
 }
 
-function DesktopSidebar({
-  onNavigate,
-  isTablet,
-}: {
-  onNavigate: (route: string) => void;
-  isTablet: boolean;
-}) {
-  return (
-    <View
-      style={[
-        styles.sidebar,
-        isTablet && styles.sidebarTablet,
-      ]}
-    >
-      <View style={styles.brandArea}>
-        <View style={styles.brandMark}>
-          <Ionicons
-            name="checkmark"
-            size={22}
-            color={COLORS.white}
-          />
-        </View>
-
-        {!isTablet && (
-          <Text style={styles.brandText}>
-            TaskFlow
-          </Text>
-        )}
-      </View>
-
-      <Text
-        style={[
-          styles.navLabel,
-          isTablet && styles.navLabelTablet,
-        ]}
-      >
-        WORKSPACE
-      </Text>
-
-      <View style={styles.navList}>
-        {NAV_ITEMS.map((item) => {
-          const active = item.label === "Meetings";
-
-          return (
-            <Pressable
-              key={item.label}
-              style={({ pressed }) => [
-                styles.navItem,
-                active && styles.navItemActive,
-                pressed && styles.navPressed,
-              ]}
-              onPress={() =>
-                onNavigate(item.route)
-              }
-            >
-              <Ionicons
-                name={item.icon}
-                size={20}
-                color={
-                  active
-                    ? COLORS.white
-                    : "#AAB7C7"
-                }
-              />
-
-              {!isTablet && (
-                <Text
-                  style={[
-                    styles.navText,
-                    active &&
-                      styles.navTextActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              )}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View style={styles.sidebarBottom}>
-        <View style={styles.sidebarProfile}>
-          <View style={styles.profileAvatar}>
-            <Text style={styles.profileAvatarText}>
-              N
-            </Text>
-          </View>
-
-          {!isTablet && (
-            <View style={styles.profileText}>
-              <Text
-                style={styles.profileName}
-                numberOfLines={1}
-              >
-                Nyayath
-              </Text>
-
-              <Text
-                style={styles.profileRole}
-                numberOfLines={1}
-              >
-                TaskFlow account
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-}
 
 function DesktopTopBar({
   search,

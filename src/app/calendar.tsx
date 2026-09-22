@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -103,6 +102,14 @@ function toDateKey(date: Date) {
 function parseDateKey(value: string) {
   const [year, month, day] = value.split("-").map(Number);
 
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return new Date();
+  }
+
   return new Date(year, month - 1, day);
 }
 
@@ -133,7 +140,6 @@ function formatActivityTime(value?: string | null) {
 function getCalendarDays(year: number, month: number) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
   const previousMonthDays = new Date(year, month, 0).getDate();
 
   const days: {
@@ -201,6 +207,8 @@ export default function CalendarScreen() {
 
   const isDesktop = width >= 1000;
   const isTablet = width >= 700;
+  const isSmallPhone = width < 390;
+  const isPhone = width < 700;
 
   const today = useMemo(() => new Date(), []);
   const todayKey = useMemo(() => toDateKey(today), [today]);
@@ -310,7 +318,10 @@ export default function CalendarScreen() {
     try {
       setUpdatingId(activity.id);
 
-      await updateActivityCompletion(activity.id, !activity.completed);
+      await updateActivityCompletion(
+        activity.id,
+        !activity.completed
+      );
 
       setActivities((current) =>
         current.map((item) =>
@@ -354,7 +365,12 @@ export default function CalendarScreen() {
             <Text style={styles.brandText}>TaskFlow</Text>
           </Pressable>
 
-          <View style={styles.desktopNav}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.desktopNavScroll}
+            contentContainerStyle={styles.desktopNav}
+          >
             {NAV_ITEMS.slice(0, 7).map((item) => {
               const active = item.route === "/calendar";
 
@@ -378,12 +394,14 @@ export default function CalendarScreen() {
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
 
           <View style={styles.topRightActions}>
             <Pressable
               style={styles.topIconButton}
               onPress={() => navigate("/help")}
+              accessibilityRole="button"
+              accessibilityLabel="Help"
             >
               <Ionicons
                 name="help-circle-outline"
@@ -395,6 +413,8 @@ export default function CalendarScreen() {
             <Pressable
               style={styles.profileButton}
               onPress={() => navigate("/settings")}
+              accessibilityRole="button"
+              accessibilityLabel="Settings and profile"
             >
               <Text style={styles.profileLetter}>N</Text>
             </Pressable>
@@ -408,10 +428,17 @@ export default function CalendarScreen() {
         {/* -------------------------------------------------------------- */}
 
         {!isDesktop && (
-          <View style={styles.mobileHeader}>
+          <View
+            style={[
+              styles.mobileHeader,
+              isSmallPhone && styles.mobileHeaderSmall,
+            ]}
+          >
             <Pressable
               style={styles.mobileMenuButton}
               onPress={() => setDrawerOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Open navigation menu"
             >
               <Ionicons
                 name="menu-outline"
@@ -432,12 +459,18 @@ export default function CalendarScreen() {
                 />
               </View>
 
-              <Text style={styles.mobileBrandText}>TaskFlow</Text>
+              {!isSmallPhone && (
+                <Text style={styles.mobileBrandText}>
+                  TaskFlow
+                </Text>
+              )}
             </Pressable>
 
             <Pressable
               style={styles.mobileProfile}
               onPress={() => navigate("/settings")}
+              accessibilityRole="button"
+              accessibilityLabel="Open settings"
             >
               <Text style={styles.mobileProfileText}>N</Text>
             </Pressable>
@@ -453,6 +486,8 @@ export default function CalendarScreen() {
                 ? 48
                 : isTablet
                 ? 28
+                : isSmallPhone
+                ? 12
                 : 18,
             },
           ]}
@@ -469,7 +504,13 @@ export default function CalendarScreen() {
           {/* HERO                                                          */}
           {/* ------------------------------------------------------------ */}
 
-          <View style={styles.hero}>
+          <View
+            style={[
+              styles.hero,
+              isPhone && styles.heroMobile,
+              isSmallPhone && styles.heroSmall,
+            ]}
+          >
             <View style={styles.heroDecorOne} />
             <View style={styles.heroDecorTwo} />
 
@@ -484,9 +525,17 @@ export default function CalendarScreen() {
               </Text>
             </View>
 
-            <View style={styles.heroActions}>
+            <View
+              style={[
+                styles.heroActions,
+                isPhone && styles.heroActionsMobile,
+              ]}
+            >
               <Pressable
-                style={styles.heroSecondaryButton}
+                style={[
+                  styles.heroSecondaryButton,
+                  isPhone && styles.heroButtonMobile,
+                ]}
                 onPress={goToToday}
               >
                 <Text style={styles.heroSecondaryText}>
@@ -495,7 +544,10 @@ export default function CalendarScreen() {
               </Pressable>
 
               <Pressable
-                style={styles.heroPrimaryButton}
+                style={[
+                  styles.heroPrimaryButton,
+                  isPhone && styles.heroButtonMobile,
+                ]}
                 onPress={() => navigate("/add-activity")}
               >
                 <Ionicons
@@ -519,10 +571,11 @@ export default function CalendarScreen() {
             <View
               style={[
                 styles.calendarHeader,
-                !isTablet && styles.calendarHeaderMobile,
+                isPhone && styles.calendarHeaderMobile,
+                isSmallPhone && styles.calendarHeaderSmall,
               ]}
             >
-              <View>
+              <View style={styles.calendarHeaderTitle}>
                 <Text style={styles.sectionEyebrow}>
                   MONTHLY VIEW
                 </Text>
@@ -537,6 +590,8 @@ export default function CalendarScreen() {
                 <Pressable
                   style={styles.monthButton}
                   onPress={goToPreviousMonth}
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous month"
                 >
                   <Ionicons
                     name="chevron-back"
@@ -548,6 +603,8 @@ export default function CalendarScreen() {
                 <Pressable
                   style={styles.monthButton}
                   onPress={goToToday}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go to today"
                 >
                   <Ionicons
                     name="calendar-outline"
@@ -559,6 +616,8 @@ export default function CalendarScreen() {
                 <Pressable
                   style={styles.monthButton}
                   onPress={goToNextMonth}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next month"
                 >
                   <Ionicons
                     name="chevron-forward"
@@ -574,7 +633,9 @@ export default function CalendarScreen() {
             <View style={styles.weekRow}>
               {WEEK_DAYS.map((day) => (
                 <View key={day} style={styles.weekDayCell}>
-                  <Text style={styles.weekDayText}>{day}</Text>
+                  <Text style={styles.weekDayText}>
+                    {isSmallPhone ? day.charAt(0) : day}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -591,15 +652,21 @@ export default function CalendarScreen() {
                     key={item.key}
                     style={[
                       styles.dayCell,
+                      isSmallPhone && styles.dayCellSmall,
                       !item.currentMonth &&
                         styles.dayCellOutsideMonth,
                       isSelected && styles.dayCellSelected,
                     ]}
                     onPress={() => selectDate(item.date)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.key}${
+                      isSelected ? ", selected" : ""
+                    }${isToday ? ", today" : ""}`}
                   >
                     <View
                       style={[
                         styles.dayNumber,
+                        isSmallPhone && styles.dayNumberSmall,
                         isToday && styles.todayNumber,
                         isSelected && styles.selectedDayNumber,
                       ]}
@@ -607,6 +674,7 @@ export default function CalendarScreen() {
                       <Text
                         style={[
                           styles.dayText,
+                          isSmallPhone && styles.dayTextSmall,
                           !item.currentMonth &&
                             styles.dayTextOutsideMonth,
                           isSelected && styles.selectedDayText,
@@ -634,7 +702,12 @@ export default function CalendarScreen() {
 
             {/* Legend */}
 
-            <View style={styles.legend}>
+            <View
+              style={[
+                styles.legend,
+                isSmallPhone && styles.legendSmall,
+              ]}
+            >
               <View style={styles.legendItem}>
                 <View
                   style={[
@@ -643,7 +716,9 @@ export default function CalendarScreen() {
                   ]}
                 />
 
-                <Text style={styles.legendText}>Selected</Text>
+                <Text style={styles.legendText}>
+                  Selected
+                </Text>
               </View>
 
               <View style={styles.legendItem}>
@@ -675,8 +750,13 @@ export default function CalendarScreen() {
                 isDesktop && styles.activitiesColumnDesktop,
               ]}
             >
-              <View style={styles.sectionHeading}>
-                <View>
+              <View
+                style={[
+                  styles.sectionHeading,
+                  isSmallPhone && styles.sectionHeadingSmall,
+                ]}
+              >
+                <View style={styles.sectionHeadingText}>
                   <Text style={styles.sectionEyebrow}>
                     SELECTED DAY
                   </Text>
@@ -689,6 +769,8 @@ export default function CalendarScreen() {
                 <Pressable
                   style={styles.refreshButton}
                   onPress={() => loadActivities(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Refresh activities"
                 >
                   <Ionicons
                     name="refresh-outline"
@@ -774,10 +856,18 @@ export default function CalendarScreen() {
                         />
 
                         <View style={styles.activityMain}>
-                          <View style={styles.activityTop}>
+                          <View
+                            style={[
+                              styles.activityTop,
+                              isSmallPhone &&
+                                styles.activityTopSmall,
+                            ]}
+                          >
                             <View
                               style={[
                                 styles.categoryIcon,
+                                isSmallPhone &&
+                                  styles.categoryIconSmall,
                                 {
                                   backgroundColor:
                                     activity.category_color
@@ -801,7 +891,6 @@ export default function CalendarScreen() {
 
                             <View style={styles.activityTitleArea}>
                               <Text
-                                numberOfLines={2}
                                 style={[
                                   styles.activityTitle,
                                   activity.completed &&
@@ -812,9 +901,7 @@ export default function CalendarScreen() {
                               </Text>
 
                               <View
-                                style={
-                                  styles.activityMeta
-                                }
+                                style={styles.activityMeta}
                               >
                                 <Text
                                   style={
@@ -856,6 +943,12 @@ export default function CalendarScreen() {
                                 toggleActivity(activity)
                               }
                               disabled={isUpdating}
+                              accessibilityRole="button"
+                              accessibilityLabel={
+                                activity.completed
+                                  ? `Mark ${activity.title} incomplete`
+                                  : `Mark ${activity.title} complete`
+                              }
                             >
                               {isUpdating ? (
                                 <ActivityIndicator
@@ -884,7 +977,13 @@ export default function CalendarScreen() {
                             </Pressable>
                           </View>
 
-                          <View style={styles.activityBottom}>
+                          <View
+                            style={[
+                              styles.activityBottom,
+                              isSmallPhone &&
+                                styles.activityBottomSmall,
+                            ]}
+                          >
                             <View
                               style={[
                                 styles.priorityBadge,
@@ -903,7 +1002,9 @@ export default function CalendarScreen() {
                                     styles.lowPriorityText,
                                 ]}
                               >
-                                {String(priority).toUpperCase()}
+                                {String(
+                                  priority
+                                ).toUpperCase()}
                               </Text>
                             </View>
 
@@ -914,6 +1015,8 @@ export default function CalendarScreen() {
                                   `/add-activity?edit=${activity.id}`
                                 )
                               }
+                              accessibilityRole="button"
+                              accessibilityLabel={`Edit ${activity.title}`}
                             >
                               <Ionicons
                                 name="create-outline"
@@ -922,7 +1025,9 @@ export default function CalendarScreen() {
                               />
 
                               <Text
-                                style={styles.editButtonText}
+                                style={
+                                  styles.editButtonText
+                                }
                               >
                                 Edit
                               </Text>
@@ -930,9 +1035,11 @@ export default function CalendarScreen() {
                           </View>
                         </View>
 
-                        <Text style={styles.activityIndex}>
-                          {String(index + 1).padStart(2, "0")}
-                        </Text>
+                        {!isSmallPhone && (
+                          <Text style={styles.activityIndex}>
+                            {String(index + 1).padStart(2, "0")}
+                          </Text>
+                        )}
                       </View>
                     );
                   })}
@@ -960,7 +1067,7 @@ export default function CalendarScreen() {
 
               <View style={styles.progressCard}>
                 <View style={styles.progressTop}>
-                  <View>
+                  <View style={styles.progressTextBlock}>
                     <Text style={styles.progressLabel}>
                       COMPLETION
                     </Text>
@@ -1001,7 +1108,12 @@ export default function CalendarScreen() {
                 </Text>
               </View>
 
-              <View style={styles.summaryStats}>
+              <View
+                style={[
+                  styles.summaryStats,
+                  isSmallPhone && styles.summaryStatsSmall,
+                ]}
+              >
                 <View style={styles.statCard}>
                   <View
                     style={[
@@ -1162,6 +1274,8 @@ export default function CalendarScreen() {
               <Pressable
                 style={styles.drawerClose}
                 onPress={() => setDrawerOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close navigation menu"
               >
                 <Ionicons
                   name="close"
@@ -1251,7 +1365,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.navy,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 38,
+    paddingHorizontal: 30,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.08)",
   },
@@ -1259,7 +1373,8 @@ const styles = StyleSheet.create({
   brand: {
     flexDirection: "row",
     alignItems: "center",
-    width: 170,
+    width: 165,
+    flexShrink: 0,
   },
 
   brandMark: {
@@ -1279,18 +1394,25 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
 
-  desktopNav: {
+  desktopNavScroll: {
     flex: 1,
+    minWidth: 0,
+  },
+
+  desktopNav: {
+    flexGrow: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
+    gap: 4,
   },
 
   desktopNavItem: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 11,
+    minWidth: 65,
     height: 72,
     justifyContent: "center",
+    alignItems: "center",
     borderBottomWidth: 3,
     borderBottomColor: "transparent",
   },
@@ -1301,7 +1423,7 @@ const styles = StyleSheet.create({
 
   desktopNavText: {
     color: "#B8C4D3",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
   },
 
@@ -1310,11 +1432,12 @@ const styles = StyleSheet.create({
   },
 
   topRightActions: {
-    width: 170,
+    width: 105,
+    flexShrink: 0,
     flexDirection: "row",
     justifyContent: "flex-end",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
   },
 
   topIconButton: {
@@ -1343,6 +1466,7 @@ const styles = StyleSheet.create({
 
   mainArea: {
     flex: 1,
+    minWidth: 0,
   },
 
   scroll: {
@@ -1360,7 +1484,7 @@ const styles = StyleSheet.create({
   /* Mobile header */
 
   mobileHeader: {
-    height: 64,
+    minHeight: 64,
     backgroundColor: COLORS.navy,
     flexDirection: "row",
     alignItems: "center",
@@ -1368,16 +1492,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
   },
 
+  mobileHeaderSmall: {
+    paddingHorizontal: 10,
+  },
+
   mobileMenuButton: {
     width: 40,
     height: 40,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   mobileBrand: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+    minWidth: 0,
   },
 
   mobileBrandMark: {
@@ -1387,13 +1519,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.orange,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
   },
 
   mobileBrandText: {
     color: COLORS.white,
     fontSize: 18,
     fontWeight: "800",
+    marginLeft: 8,
   },
 
   mobileProfile: {
@@ -1403,6 +1535,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.gold,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   mobileProfileText: {
@@ -1427,9 +1560,21 @@ const styles = StyleSheet.create({
     position: "relative",
   },
 
+  heroMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "center",
+  },
+
+  heroSmall: {
+    paddingHorizontal: 20,
+    paddingVertical: 23,
+  },
+
   heroContent: {
     flex: 1,
     maxWidth: 720,
+    minWidth: 0,
     zIndex: 2,
   },
 
@@ -1463,16 +1608,28 @@ const styles = StyleSheet.create({
     gap: 10,
     marginLeft: 25,
     zIndex: 3,
+    flexShrink: 0,
+  },
+
+  heroActionsMobile: {
+    marginLeft: 0,
+    marginTop: 20,
+    alignSelf: "stretch",
   },
 
   heroSecondaryButton: {
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: 17,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.28)",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  heroButtonMobile: {
+    flex: 1,
+    minWidth: 0,
   },
 
   heroSecondaryText: {
@@ -1482,7 +1639,7 @@ const styles = StyleSheet.create({
   },
 
   heroPrimaryButton: {
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: 18,
     borderRadius: 6,
     backgroundColor: COLORS.orange,
@@ -1545,6 +1702,16 @@ const styles = StyleSheet.create({
     gap: 15,
   },
 
+  calendarHeaderSmall: {
+    paddingHorizontal: 15,
+    paddingVertical: 17,
+  },
+
+  calendarHeaderTitle: {
+    flex: 1,
+    minWidth: 0,
+  },
+
   sectionEyebrow: {
     color: COLORS.orange,
     fontSize: 10,
@@ -1564,6 +1731,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
+    flexShrink: 0,
   },
 
   monthButton: {
@@ -1615,6 +1783,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  dayCellSmall: {
+    height: 52,
+    padding: 5,
+  },
+
   dayCellOutsideMonth: {
     backgroundColor: "#FAFBFC",
   },
@@ -1629,6 +1802,11 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  dayNumberSmall: {
+    width: 27,
+    height: 27,
   },
 
   todayNumber: {
@@ -1646,6 +1824,10 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
     fontSize: 13,
     fontWeight: "700",
+  },
+
+  dayTextSmall: {
+    fontSize: 11,
   },
 
   dayTextOutsideMonth: {
@@ -1680,6 +1862,10 @@ const styles = StyleSheet.create({
     gap: 20,
   },
 
+  legendSmall: {
+    paddingHorizontal: 15,
+  },
+
   legendItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1712,6 +1898,7 @@ const styles = StyleSheet.create({
 
   activitiesColumn: {
     width: "100%",
+    minWidth: 0,
   },
 
   activitiesColumnDesktop: {
@@ -1721,6 +1908,7 @@ const styles = StyleSheet.create({
   summaryColumn: {
     width: "100%",
     marginTop: 28,
+    minWidth: 0,
   },
 
   summaryColumnDesktop: {
@@ -1733,11 +1921,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 13,
+    gap: 12,
+  },
+
+  sectionHeadingSmall: {
+    alignItems: "flex-start",
+  },
+
+  sectionHeadingText: {
+    flex: 1,
+    minWidth: 0,
   },
 
   sectionTitle: {
     color: COLORS.navy,
     fontSize: 22,
+    lineHeight: 29,
     fontWeight: "800",
     letterSpacing: -0.45,
   },
@@ -1751,6 +1950,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   loadingCard: {
@@ -1807,11 +2007,12 @@ const styles = StyleSheet.create({
 
   emptyButton: {
     backgroundColor: COLORS.orange,
-    height: 40,
+    minHeight: 40,
     paddingHorizontal: 16,
     borderRadius: 6,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
   },
 
@@ -1844,17 +2045,23 @@ const styles = StyleSheet.create({
 
   activityAccent: {
     width: 4,
-    height: "100%",
+    alignSelf: "stretch",
   },
 
   activityMain: {
     flex: 1,
+    minWidth: 0,
     paddingHorizontal: 15,
     paddingVertical: 14,
   },
 
   activityTop: {
     flexDirection: "row",
+    alignItems: "flex-start",
+    minWidth: 0,
+  },
+
+  activityTopSmall: {
     alignItems: "flex-start",
   },
 
@@ -1865,10 +2072,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 11,
+    flexShrink: 0,
+  },
+
+  categoryIconSmall: {
+    width: 35,
+    height: 35,
+    marginRight: 8,
   },
 
   activityTitleArea: {
     flex: 1,
+    minWidth: 0,
     paddingRight: 8,
   },
 
@@ -1909,6 +2124,7 @@ const styles = StyleSheet.create({
     color: COLORS.lightMuted,
     fontSize: 11,
     fontWeight: "600",
+    flexShrink: 1,
   },
 
   completeButton: {
@@ -1917,6 +2133,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   completeButtonDone: {
@@ -1928,6 +2145,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  activityBottomSmall: {
+    justifyContent: "flex-start",
   },
 
   priorityBadge: {
@@ -2004,6 +2227,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 15,
+  },
+
+  progressTextBlock: {
+    flex: 1,
+    minWidth: 0,
   },
 
   progressLabel: {
@@ -2029,6 +2258,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.gold,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   progressCircleText: {
@@ -2042,11 +2272,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.13)",
     marginTop: 18,
     overflow: "hidden",
+    borderRadius: 3,
   },
 
   progressFill: {
     height: "100%",
     backgroundColor: COLORS.orange,
+    borderRadius: 3,
   },
 
   progressDescription: {
@@ -2062,8 +2294,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+  summaryStatsSmall: {
+    gap: 5,
+  },
+
   statCard: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -2123,10 +2360,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 11,
+    flexShrink: 0,
   },
 
   tipContent: {
     flex: 1,
+    minWidth: 0,
   },
 
   tipTitle: {
@@ -2222,6 +2461,7 @@ const styles = StyleSheet.create({
   drawerBrand: {
     flexDirection: "row",
     alignItems: "center",
+    minWidth: 0,
   },
 
   drawerBrandMark: {
@@ -2245,6 +2485,7 @@ const styles = StyleSheet.create({
     height: 38,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   drawerContent: {

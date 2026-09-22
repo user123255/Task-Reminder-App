@@ -130,6 +130,28 @@ const REMINDER_OPTIONS: ReminderOption[] = [
   },
 ];
 
+const HOURS = [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+];
+
+const MINUTES = [
+  0,
+  15,
+  30,
+  45,
+];
+
 function formatDate(date: Date) {
   return date.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -138,11 +160,15 @@ function formatDate(date: Date) {
   });
 }
 
-function formatTime(date: Date) {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+function formatTime(
+  hour: number,
+  minute: number,
+  period: 'AM' | 'PM'
+) {
+  return `${hour}:${String(minute).padStart(
+    2,
+    '0'
+  )} ${period}`;
 }
 
 function to24Hour(
@@ -160,9 +186,13 @@ function to24Hour(
     convertedHour = hour + 12;
   }
 
-  return `${String(convertedHour).padStart(2, '0')}:${String(
-    minute
-  ).padStart(2, '0')}:00`;
+  return `${String(convertedHour).padStart(
+    2,
+    '0'
+  )}:${String(minute).padStart(
+    2,
+    '0'
+  )}:00`;
 }
 
 function getDateKey(date: Date) {
@@ -170,11 +200,14 @@ function getDateKey(date: Date) {
 }
 
 export default function AddActivityScreen() {
-  const [activityName, setActivityName] = useState('');
-  const [description, setDescription] = useState('');
+  const [activityName, setActivityName] =
+    useState('');
+
+  const [description, setDescription] =
+    useState('');
 
   const [selectedArea, setSelectedArea] =
-  useState('Other');
+    useState('Other');
 
   const [selectedDate, setSelectedDate] =
     useState(new Date());
@@ -218,7 +251,8 @@ export default function AddActivityScreen() {
   const selectedAreaData = useMemo(
     () =>
       LIFE_AREAS.find(
-        (area) => area.name === selectedArea
+        (area) =>
+          area.name === selectedArea
       ) ?? LIFE_AREAS[0],
     [selectedArea]
   );
@@ -226,7 +260,8 @@ export default function AddActivityScreen() {
   const selectedRepeatLabel = useMemo(
     () =>
       REPEAT_OPTIONS.find(
-        (option) => option.value === repeat
+        (option) =>
+          option.value === repeat
       )?.label ?? 'Does not repeat',
     [repeat]
   );
@@ -239,10 +274,20 @@ export default function AddActivityScreen() {
     return (
       REMINDER_OPTIONS.find(
         (option) =>
-          option.minutes === reminderMinutes
+          option.minutes ===
+          reminderMinutes
       )?.label ?? '5 minutes before'
     );
-  }, [reminder, reminderMinutes]);
+  }, [
+    reminder,
+    reminderMinutes,
+  ]);
+
+  const displayTime = formatTime(
+    selectedHour,
+    selectedMinute,
+    selectedPeriod
+  );
 
   const scheduledTime = to24Hour(
     selectedHour,
@@ -273,18 +318,19 @@ export default function AddActivityScreen() {
       setSaving(true);
 
       await createActivity({
-  title,
-  description: description.trim(),
-  category: selectedArea,
-  scheduled_date: getDateKey(selectedDate),
-  scheduled_time: scheduledTime,
-  repeat,
-  priority,
-  reminder,
-  reminder_minutes: reminder
-    ? reminderMinutes ?? 5
-    : undefined,
-});
+        title,
+        description: description.trim(),
+        category: selectedArea,
+        scheduled_date:
+          getDateKey(selectedDate),
+        scheduled_time: scheduledTime,
+        repeat,
+        priority,
+        reminder,
+        reminder_minutes: reminder
+          ? reminderMinutes ?? 5
+          : undefined,
+      });
 
       Alert.alert(
         'Activity created 🎉',
@@ -315,12 +361,18 @@ export default function AddActivityScreen() {
 
   const changeDay = (amount: number) => {
     const next = new Date(selectedDate);
-    next.setDate(next.getDate() + amount);
+
+    next.setDate(
+      next.getDate() + amount
+    );
+
     setSelectedDate(next);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* HEADER */}
+
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
@@ -342,9 +394,13 @@ export default function AddActivityScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={
+          styles.container
+        }
         keyboardShouldPersistTaps="handled"
       >
+        {/* HERO */}
+
         <View style={styles.hero}>
           <View style={styles.heroIcon}>
             <Ionicons
@@ -359,10 +415,12 @@ export default function AddActivityScreen() {
           </Text>
 
           <Text style={styles.heroSubtitle}>
-            Schedule an activity and we'll help you
-            stay on track.
+            Schedule an activity and we'll
+            help you stay on track.
           </Text>
         </View>
+
+        {/* ACTIVITY */}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>
@@ -394,6 +452,8 @@ export default function AddActivityScreen() {
           />
         </View>
 
+        {/* LIFE AREA */}
+
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>
             LIFE AREA
@@ -402,17 +462,22 @@ export default function AddActivityScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalOptions}
+            contentContainerStyle={
+              styles.horizontalOptions
+            }
           >
             {LIFE_AREAS.map((area) => {
               const selected =
-                selectedArea === area.name;
+                selectedArea ===
+                area.name;
 
               return (
                 <Pressable
                   key={area.name}
                   onPress={() =>
-                    setSelectedArea(area.name)
+                    setSelectedArea(
+                      area.name
+                    )
                   }
                   style={[
                     styles.areaCard,
@@ -453,14 +518,22 @@ export default function AddActivityScreen() {
           </ScrollView>
         </View>
 
+        {/* WHEN */}
+
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>
             WHEN
           </Text>
 
           <View style={styles.scheduleCard}>
+            {/* DATE */}
+
             <View style={styles.scheduleRow}>
-              <View style={styles.scheduleRowIcon}>
+              <View
+                style={
+                  styles.scheduleRowIcon
+                }
+              >
                 <Ionicons
                   name="calendar-outline"
                   size={22}
@@ -469,11 +542,15 @@ export default function AddActivityScreen() {
               </View>
 
               <View style={styles.scheduleInfo}>
-                <Text style={styles.scheduleTitle}>
+                <Text
+                  style={styles.scheduleTitle}
+                >
                   Date
                 </Text>
 
-                <Text style={styles.scheduleValue}>
+                <Text
+                  style={styles.scheduleValue}
+                >
                   {formatDate(selectedDate)}
                 </Text>
               </View>
@@ -482,9 +559,15 @@ export default function AddActivityScreen() {
                 onPress={() =>
                   setShowDateModal(true)
                 }
-                style={styles.changeButton}
+                style={
+                  styles.changeButton
+                }
               >
-                <Text style={styles.changeButtonText}>
+                <Text
+                  style={
+                    styles.changeButtonText
+                  }
+                >
                   Change
                 </Text>
               </Pressable>
@@ -492,8 +575,14 @@ export default function AddActivityScreen() {
 
             <View style={styles.divider} />
 
+            {/* TIME */}
+
             <View style={styles.scheduleRow}>
-              <View style={styles.scheduleRowIcon}>
+              <View
+                style={
+                  styles.scheduleRowIcon
+                }
+              >
                 <Ionicons
                   name="time-outline"
                   size={22}
@@ -502,26 +591,16 @@ export default function AddActivityScreen() {
               </View>
 
               <View style={styles.scheduleInfo}>
-                <Text style={styles.scheduleTitle}>
+                <Text
+                  style={styles.scheduleTitle}
+                >
                   Time
                 </Text>
 
-                <Text style={styles.scheduleValue}>
-                  {formatTime(
-                    new Date(
-                      2026,
-                      0,
-                      1,
-                      selectedPeriod === 'PM' &&
-                        selectedHour !== 12
-                        ? selectedHour + 12
-                        : selectedPeriod === 'AM' &&
-                            selectedHour === 12
-                          ? 0
-                          : selectedHour,
-                      selectedMinute
-                    )
-                  )}
+                <Text
+                  style={styles.scheduleValue}
+                >
+                  {displayTime}
                 </Text>
               </View>
 
@@ -529,52 +608,89 @@ export default function AddActivityScreen() {
                 onPress={() =>
                   setShowTimeModal(true)
                 }
-                style={styles.changeButton}
+                style={
+                  styles.changeButton
+                }
               >
-                <Text style={styles.changeButtonText}>
+                <Text
+                  style={
+                    styles.changeButtonText
+                  }
+                >
                   Change
                 </Text>
               </Pressable>
             </View>
           </View>
 
+          {/* QUICK DATES */}
+
           <View style={styles.quickDateRow}>
             <Pressable
               onPress={() =>
-                setSelectedDate(new Date())
+                setSelectedDate(
+                  new Date()
+                )
               }
-              style={styles.quickDateButton}
+              style={
+                styles.quickDateButton
+              }
             >
-              <Text style={styles.quickDateText}>
+              <Text
+                style={
+                  styles.quickDateText
+                }
+              >
                 Today
               </Text>
             </Pressable>
 
             <Pressable
               onPress={() => {
-                const tomorrow = new Date();
+                const tomorrow =
+                  new Date();
+
                 tomorrow.setDate(
                   tomorrow.getDate() + 1
                 );
-                setSelectedDate(tomorrow);
+
+                setSelectedDate(
+                  tomorrow
+                );
               }}
-              style={styles.quickDateButton}
+              style={
+                styles.quickDateButton
+              }
             >
-              <Text style={styles.quickDateText}>
+              <Text
+                style={
+                  styles.quickDateText
+                }
+              >
                 Tomorrow
               </Text>
             </Pressable>
 
             <Pressable
-              onPress={() => changeDay(7)}
-              style={styles.quickDateButton}
+              onPress={() =>
+                changeDay(7)
+              }
+              style={
+                styles.quickDateButton
+              }
             >
-              <Text style={styles.quickDateText}>
+              <Text
+                style={
+                  styles.quickDateText
+                }
+              >
                 Next week
               </Text>
             </Pressable>
           </View>
         </View>
+
+        {/* REPEAT */}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>
@@ -596,11 +712,15 @@ export default function AddActivityScreen() {
             </View>
 
             <View style={styles.selectContent}>
-              <Text style={styles.selectTitle}>
+              <Text
+                style={styles.selectTitle}
+              >
                 Repeat
               </Text>
 
-              <Text style={styles.selectValue}>
+              <Text
+                style={styles.selectValue}
+              >
                 {selectedRepeatLabel}
               </Text>
             </View>
@@ -612,6 +732,8 @@ export default function AddActivityScreen() {
             />
           </Pressable>
         </View>
+
+        {/* PRIORITY */}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>
@@ -627,7 +749,9 @@ export default function AddActivityScreen() {
                 <Pressable
                   key={item.value}
                   onPress={() =>
-                    setPriority(item.value)
+                    setPriority(
+                      item.value
+                    )
                   }
                   style={[
                     styles.priorityButton,
@@ -660,6 +784,8 @@ export default function AddActivityScreen() {
           </View>
         </View>
 
+        {/* REMINDER */}
+
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>
             REMINDER
@@ -674,12 +800,18 @@ export default function AddActivityScreen() {
               />
             </View>
 
-            <View style={styles.reminderContent}>
-              <Text style={styles.reminderTitle}>
+            <View
+              style={styles.reminderContent}
+            >
+              <Text
+                style={styles.reminderTitle}
+              >
                 Remind me
               </Text>
 
-              <Text style={styles.reminderSubtitle}>
+              <Text
+                style={styles.reminderSubtitle}
+              >
                 {reminder
                   ? selectedReminderLabel
                   : 'No reminder'}
@@ -713,11 +845,19 @@ export default function AddActivityScreen() {
           {reminder && (
             <Pressable
               onPress={() =>
-                setShowReminderModal(true)
+                setShowReminderModal(
+                  true
+                )
               }
-              style={styles.reminderOption}
+              style={
+                styles.reminderOption
+              }
             >
-              <Text style={styles.reminderOptionText}>
+              <Text
+                style={
+                  styles.reminderOptionText
+                }
+              >
                 {selectedReminderLabel}
               </Text>
 
@@ -736,16 +876,24 @@ export default function AddActivityScreen() {
               color="#208AEF"
             />
 
-            <Text style={styles.reminderTipText}>
-              Your reminder will be scheduled
-              automatically when notifications are
-              enabled.
+            <Text
+              style={
+                styles.reminderTipText
+              }
+            >
+              Your reminder will be
+              scheduled automatically when
+              notifications are enabled.
             </Text>
           </View>
         </View>
 
+        {/* PREVIEW */}
+
         <View style={styles.previewCard}>
-          <Text style={styles.previewLabel}>
+          <Text
+            style={styles.previewLabel}
+          >
             PREVIEW
           </Text>
 
@@ -758,42 +906,39 @@ export default function AddActivityScreen() {
               />
             </View>
 
-            <View style={styles.previewContent}>
-              <Text style={styles.previewTitle}>
+            <View
+              style={styles.previewContent}
+            >
+              <Text
+                style={styles.previewTitle}
+                numberOfLines={2}
+              >
                 {activityName.trim() ||
                   'Your activity'}
               </Text>
 
-              <Text style={styles.previewMeta}>
+              <Text
+                style={styles.previewMeta}
+              >
                 {selectedArea} ·{' '}
                 {formatDate(selectedDate)} ·{' '}
-                {formatTime(
-                  new Date(
-                    2026,
-                    0,
-                    1,
-                    selectedPeriod === 'PM' &&
-                      selectedHour !== 12
-                      ? selectedHour + 12
-                      : selectedPeriod === 'AM' &&
-                          selectedHour === 12
-                        ? 0
-                        : selectedHour,
-                    selectedMinute
-                  )
-                )}
+                {displayTime}
               </Text>
             </View>
           </View>
         </View>
+
+        {/* SAVE */}
 
         <Pressable
           onPress={handleSave}
           disabled={saving}
           style={({ pressed }) => [
             styles.saveButton,
-            pressed && styles.saveButtonPressed,
-            saving && styles.saveButtonDisabled,
+            pressed &&
+              styles.saveButtonPressed,
+            saving &&
+              styles.saveButtonDisabled,
           ]}
         >
           {saving ? (
@@ -808,25 +953,36 @@ export default function AddActivityScreen() {
                 color="#FFFFFF"
               />
 
-              <Text style={styles.saveButtonText}>
+              <Text
+                style={
+                  styles.saveButtonText
+                }
+              >
                 Create activity
               </Text>
             </>
           )}
         </Pressable>
 
+        {/* CANCEL */}
+
         <Pressable
           onPress={() => router.back()}
           disabled={saving}
           style={styles.cancelButton}
         >
-          <Text style={styles.cancelButtonText}>
+          <Text
+            style={styles.cancelButtonText}
+          >
             Cancel
           </Text>
         </Pressable>
       </ScrollView>
 
-      {/* Date Modal */}
+      {/* =====================================================
+          DATE MODAL
+          ===================================================== */}
+
       <Modal
         visible={showDateModal}
         transparent
@@ -839,8 +995,12 @@ export default function AddActivityScreen() {
           <View style={styles.modalCard}>
             <View style={styles.modalHandle} />
 
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+            <View
+              style={styles.modalHeader}
+            >
+              <Text
+                style={styles.modalTitle}
+              >
                 Choose date
               </Text>
 
@@ -857,29 +1017,51 @@ export default function AddActivityScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.datePreview}>
-              <Text style={styles.datePreviewDay}>
+            <View
+              style={styles.datePreview}
+            >
+              <Text
+                style={
+                  styles.datePreviewDay
+                }
+              >
                 {selectedDate.toLocaleDateString(
                   'en-US',
-                  { weekday: 'short' }
+                  {
+                    weekday: 'short',
+                  }
                 )}
               </Text>
 
-              <Text style={styles.datePreviewNumber}>
+              <Text
+                style={
+                  styles.datePreviewNumber
+                }
+              >
                 {selectedDate.getDate()}
               </Text>
 
-              <Text style={styles.datePreviewMonth}>
+              <Text
+                style={
+                  styles.datePreviewMonth
+                }
+              >
                 {selectedDate.toLocaleDateString(
                   'en-US',
-                  { month: 'long' }
+                  {
+                    month: 'long',
+                  }
                 )}
               </Text>
             </View>
 
-            <View style={styles.dateControls}>
+            <View
+              style={styles.dateControls}
+            >
               <Pressable
-                onPress={() => changeDay(-1)}
+                onPress={() =>
+                  changeDay(-1)
+                }
                 style={styles.dateArrow}
               >
                 <Ionicons
@@ -889,12 +1071,19 @@ export default function AddActivityScreen() {
                 />
               </Pressable>
 
-              <Text style={styles.dateControlText}>
+              <Text
+                style={
+                  styles.dateControlText
+                }
+                numberOfLines={1}
+              >
                 {formatDate(selectedDate)}
               </Text>
 
               <Pressable
-                onPress={() => changeDay(1)}
+                onPress={() =>
+                  changeDay(1)
+                }
                 style={styles.dateArrow}
               >
                 <Ionicons
@@ -907,12 +1096,18 @@ export default function AddActivityScreen() {
 
             <Pressable
               onPress={() => {
-                setSelectedDate(new Date());
+                setSelectedDate(
+                  new Date()
+                );
                 setShowDateModal(false);
               }}
               style={styles.todayButton}
             >
-              <Text style={styles.todayButtonText}>
+              <Text
+                style={
+                  styles.todayButtonText
+                }
+              >
                 Use today
               </Text>
             </Pressable>
@@ -921,9 +1116,13 @@ export default function AddActivityScreen() {
               onPress={() =>
                 setShowDateModal(false)
               }
-              style={styles.modalDoneButton}
+              style={
+                styles.modalDoneButton
+              }
             >
-              <Text style={styles.modalDoneText}>
+              <Text
+                style={styles.modalDoneText}
+              >
                 Done
               </Text>
             </Pressable>
@@ -931,7 +1130,10 @@ export default function AddActivityScreen() {
         </View>
       </Modal>
 
-      {/* Time Modal */}
+      {/* =====================================================
+          TIME MODAL
+          ===================================================== */}
+
       <Modal
         visible={showTimeModal}
         transparent
@@ -941,132 +1143,285 @@ export default function AddActivityScreen() {
         }
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHandle}
-             />
+          <View style={styles.timeModalCard}>
+            <View style={styles.modalHandle} />
 
+            <View
+              style={styles.modalHeader}
+            >
+              <View>
+                <Text
+                  style={styles.modalTitle}
+                >
+                  Choose time
+                </Text>
 
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Choose time
-              </Text>
-
+                <Text
+                  style={
+                    styles.timeModalSubtitle
+                  }
+                >
+                  Select hour, minutes and period
+                </Text>
+              </View>
 
               <Pressable
                 onPress={() =>
                   setShowTimeModal(false)
                 }
+                style={styles.closeButton}
               >
                 <Ionicons
                   name="close"
-                  size={24}
+                  size={23}
                   color="#172033"
                 />
               </Pressable>
             </View>
 
+            {/* CURRENT TIME */}
+
+            <View
+              style={styles.selectedTimeBanner}
+            >
+              <Ionicons
+                name="time-outline"
+                size={22}
+                color="#208AEF"
+              />
+
+              <Text
+                style={
+                  styles.selectedTimeText
+                }
+              >
+                {displayTime}
+              </Text>
+            </View>
+
+            {/* PICKER */}
+
             <View style={styles.timePicker}>
-              <View style={styles.timeColumn}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(
-  (hour) => (
-    <Pressable
-      key={hour}
-      onPress={() => setSelectedHour(hour)}
-      style={[
-        styles.timeChoice,
-        selectedHour === hour &&
-          styles.timeChoiceSelected,
-      ]}
-    >
-      <Text
-        style={[
-          styles.timeChoiceText,
-          selectedHour === hour &&
-            styles.timeChoiceTextSelected,
-        ]}
-      >
-        {hour}
-      </Text>
-    </Pressable>
-  )
-)}
-              </View>
+              {/* HOUR */}
 
-              <View style={styles.timeColumn}>
-                {[0, 15, 30, 45].map(
-                  (minute) => (
-                    <Pressable
-                      key={minute}
-                      onPress={() =>
-                        setSelectedMinute(minute)
-                      }
-                      style={[
-                        styles.timeChoice,
-                        selectedMinute === minute &&
-                          styles.timeChoiceSelected,
-                      ]}
-                    >
-                      <Text
+              <View
+                style={styles.timePickerColumn}
+              >
+                <Text
+                  style={styles.timePickerLabel}
+                >
+                  HOUR
+                </Text>
+
+                <ScrollView
+                  style={styles.timeScroll}
+                  contentContainerStyle={
+                    styles.timeScrollContent
+                  }
+                  showsVerticalScrollIndicator={
+                    false
+                  }
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {HOURS.map((hour) => {
+                    const selected =
+                      selectedHour ===
+                      hour;
+
+                    return (
+                      <Pressable
+                        key={hour}
+                        onPress={() =>
+                          setSelectedHour(
+                            hour
+                          )
+                        }
                         style={[
-                          styles.timeChoiceText,
-                          selectedMinute === minute &&
-                            styles.timeChoiceTextSelected,
+                          styles.timeChoice,
+                          selected &&
+                            styles.timeChoiceSelected,
                         ]}
                       >
-                        {String(minute).padStart(
-                          2,
-                          '0'
-                        )}
-                      </Text>
-                    </Pressable>
-                  )
-                )}
+                        <Text
+                          style={[
+                            styles.timeChoiceText,
+                            selected &&
+                              styles.timeChoiceTextSelected,
+                          ]}
+                        >
+                          {hour}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
-              <View style={styles.periodColumn}>
-                {(['AM', 'PM'] as const).map(
-                  (period) => (
-                    <Pressable
-                      key={period}
-                      onPress={() =>
-                        setSelectedPeriod(period)
-                      }
-                      style={[
-                        styles.periodChoice,
-                        selectedPeriod === period &&
-                          styles.periodChoiceSelected,
-                      ]}
-                    >
-                      <Text
+              {/* MINUTES */}
+
+              <View
+                style={styles.timePickerColumn}
+              >
+                <Text
+                  style={styles.timePickerLabel}
+                >
+                  MIN
+                </Text>
+
+                <ScrollView
+                  style={styles.timeScroll}
+                  contentContainerStyle={
+                    styles.timeScrollContent
+                  }
+                  showsVerticalScrollIndicator={
+                    false
+                  }
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {MINUTES.map((minute) => {
+                    const selected =
+                      selectedMinute ===
+                      minute;
+
+                    return (
+                      <Pressable
+                        key={minute}
+                        onPress={() =>
+                          setSelectedMinute(
+                            minute
+                          )
+                        }
                         style={[
-                          styles.periodChoiceText,
-                          selectedPeriod === period &&
-                            styles.periodChoiceTextSelected,
+                          styles.timeChoice,
+                          selected &&
+                            styles.timeChoiceSelected,
                         ]}
                       >
-                        {period}
-                      </Text>
-                    </Pressable>
-                  )
-                )}
+                        <Text
+                          style={[
+                            styles.timeChoiceText,
+                            selected &&
+                              styles.timeChoiceTextSelected,
+                          ]}
+                        >
+                          {String(
+                            minute
+                          ).padStart(
+                            2,
+                            '0'
+                          )}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               </View>
+
+              {/* AM / PM */}
+
+              <View
+                style={styles.periodColumn}
+              >
+                <Text
+                  style={styles.timePickerLabel}
+                >
+                  PERIOD
+                </Text>
+
+                <View
+                  style={
+                    styles.periodChoices
+                  }
+                >
+                  {(
+                    ['AM', 'PM'] as const
+                  ).map((period) => {
+                    const selected =
+                      selectedPeriod ===
+                      period;
+
+                    return (
+                      <Pressable
+                        key={period}
+                        onPress={() =>
+                          setSelectedPeriod(
+                            period
+                          )
+                        }
+                        style={[
+                          styles.periodChoice,
+                          selected &&
+                            styles.periodChoiceSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.periodChoiceText,
+                            selected &&
+                              styles.periodChoiceTextSelected,
+                          ]}
+                        >
+                          {period}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+            {/* TIME EXPLANATION */}
+
+            <View
+              style={styles.timeFormatHint}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={17}
+                color="#208AEF"
+              />
+
+              <Text
+                style={
+                  styles.timeFormatHintText
+                }
+              >
+                Time will be saved as{' '}
+                <Text
+                  style={
+                    styles.timeFormatStrong
+                  }
+                >
+                  {scheduledTime}
+                </Text>{' '}
+                for your schedule.
+              </Text>
             </View>
 
             <Pressable
               onPress={() =>
                 setShowTimeModal(false)
               }
-              style={styles.modalDoneButton}
+              style={
+                styles.modalDoneButton
+              }
             >
-              <Text style={styles.modalDoneText}>
-                Set time
+              <Text
+                style={styles.modalDoneText}
+              >
+                Set time · {displayTime}
               </Text>
             </Pressable>
           </View>
         </View>
       </Modal>
 
-      {/* Repeat Modal */}
+      {/* =====================================================
+          REPEAT MODAL
+          ===================================================== */}
+
       <Modal
         visible={showRepeatModal}
         transparent
@@ -1079,8 +1434,12 @@ export default function AddActivityScreen() {
           <View style={styles.modalCard}>
             <View style={styles.modalHandle} />
 
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+            <View
+              style={styles.modalHeader}
+            >
+              <Text
+                style={styles.modalTitle}
+              >
                 Repeat activity
               </Text>
 
@@ -1097,48 +1456,58 @@ export default function AddActivityScreen() {
               </Pressable>
             </View>
 
-            {REPEAT_OPTIONS.map((option) => {
-              const selected =
-                repeat === option.value;
+            {REPEAT_OPTIONS.map(
+              (option) => {
+                const selected =
+                  repeat ===
+                  option.value;
 
-              return (
-                <Pressable
-                  key={option.value}
-                  onPress={() => {
-                    setRepeat(option.value);
-                    setShowRepeatModal(false);
-                  }}
-                  style={[
-                    styles.modalOption,
-                    selected &&
-                      styles.modalOptionSelected,
-                  ]}
-                >
-                  <Text
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => {
+                      setRepeat(
+                        option.value
+                      );
+                      setShowRepeatModal(
+                        false
+                      );
+                    }}
                     style={[
-                      styles.modalOptionText,
+                      styles.modalOption,
                       selected &&
-                        styles.modalOptionTextSelected,
+                        styles.modalOptionSelected,
                     ]}
                   >
-                    {option.label}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        selected &&
+                          styles.modalOptionTextSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
 
-                  {selected && (
-                    <Ionicons
-                      name="checkmark"
-                      size={21}
-                      color="#208AEF"
-                    />
-                  )}
-                </Pressable>
-              );
-            })}
+                    {selected && (
+                      <Ionicons
+                        name="checkmark"
+                        size={21}
+                        color="#208AEF"
+                      />
+                    )}
+                  </Pressable>
+                );
+              }
+            )}
           </View>
         </View>
       </Modal>
 
-      {/* Reminder Modal */}
+      {/* =====================================================
+          REMINDER MODAL
+          ===================================================== */}
+
       <Modal
         visible={showReminderModal}
         transparent
@@ -1151,14 +1520,20 @@ export default function AddActivityScreen() {
           <View style={styles.modalCard}>
             <View style={styles.modalHandle} />
 
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+            <View
+              style={styles.modalHeader}
+            >
+              <Text
+                style={styles.modalTitle}
+              >
                 Reminder time
               </Text>
 
               <Pressable
                 onPress={() =>
-                  setShowReminderModal(false)
+                  setShowReminderModal(
+                    false
+                  )
                 }
               >
                 <Ionicons
@@ -1169,57 +1544,64 @@ export default function AddActivityScreen() {
               </Pressable>
             </View>
 
-            {REMINDER_OPTIONS.map((option) => {
-              const selected =
-                reminderMinutes ===
-                option.minutes;
+            {REMINDER_OPTIONS.map(
+              (option) => {
+                const selected =
+                  reminderMinutes ===
+                  option.minutes;
 
-              return (
-                <Pressable
-                  key={option.label}
-                  onPress={() => {
-                    setReminderMinutes(
-                      option.minutes
-                    );
-                    setReminder(true);
-                    setShowReminderModal(false);
-                  }}
-                  style={[
-                    styles.modalOption,
-                    selected &&
-                      styles.modalOptionSelected,
-                  ]}
-                >
-                  <View>
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        selected &&
-                          styles.modalOptionTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-
-                    {option.minutes === 5 && (
+                return (
+                  <Pressable
+                    key={option.label}
+                    onPress={() => {
+                      setReminderMinutes(
+                        option.minutes
+                      );
+                      setReminder(true);
+                      setShowReminderModal(
+                        false
+                      );
+                    }}
+                    style={[
+                      styles.modalOption,
+                      selected &&
+                        styles.modalOptionSelected,
+                    ]}
+                  >
+                    <View>
                       <Text
-                        style={styles.recommendedText}
+                        style={[
+                          styles.modalOptionText,
+                          selected &&
+                            styles.modalOptionTextSelected,
+                        ]}
                       >
-                        Recommended
+                        {option.label}
                       </Text>
-                    )}
-                  </View>
 
-                  {selected && (
-                    <Ionicons
-                      name="checkmark"
-                      size={21}
-                      color="#208AEF"
-                    />
-                  )}
-                </Pressable>
-              );
-            })}
+                      {option.minutes ===
+                        5 && (
+                        <Text
+                          style={
+                            styles.recommendedText
+                          }
+                        >
+                          Recommended
+                        </Text>
+                      )}
+                    </View>
+
+                    {selected && (
+                      <Ionicons
+                        name="checkmark"
+                        size={21}
+                        color="#208AEF"
+                      />
+                    )}
+                  </Pressable>
+                );
+              }
+            )}
           </View>
         </View>
       </Modal>
@@ -1369,7 +1751,8 @@ const styles = StyleSheet.create({
   },
 
   areaIconSelected: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor:
+      'rgba(255,255,255,0.18)',
   },
 
   areaText: {
@@ -1408,6 +1791,7 @@ const styles = StyleSheet.create({
 
   scheduleInfo: {
     flex: 1,
+    minWidth: 0,
   },
 
   scheduleTitle: {
@@ -1554,6 +1938,7 @@ const styles = StyleSheet.create({
 
   reminderContent: {
     flex: 1,
+    minWidth: 0,
   },
 
   reminderTitle: {
@@ -1636,6 +2021,7 @@ const styles = StyleSheet.create({
 
   previewContent: {
     flex: 1,
+    minWidth: 0,
   },
 
   previewTitle: {
@@ -1648,6 +2034,7 @@ const styles = StyleSheet.create({
     color: '#AAB4C5',
     fontSize: 11,
     marginTop: 5,
+    lineHeight: 17,
   },
 
   saveButton: {
@@ -1687,9 +2074,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  /* =====================================================
+     MODALS
+     ===================================================== */
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(23,32,51,0.45)',
+    backgroundColor:
+      'rgba(23,32,51,0.45)',
     justifyContent: 'flex-end',
   },
 
@@ -1699,7 +2091,20 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     padding: 20,
     paddingBottom:
-      Platform.OS === 'ios' ? 36 : 24,
+      Platform.OS === 'ios'
+        ? 36
+        : 24,
+  },
+
+  timeModalCard: {
+    backgroundColor: '#F6F8FC',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom:
+      Platform.OS === 'ios'
+        ? 36
+        : 24,
   },
 
   modalHandle: {
@@ -1713,7 +2118,8 @@ const styles = StyleSheet.create({
 
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
     alignItems: 'center',
     marginBottom: 18,
   },
@@ -1723,6 +2129,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#172033',
   },
+
+  timeModalSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#667085',
+  },
+
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* =====================================================
+     DATE MODAL
+     ===================================================== */
 
   datePreview: {
     alignItems: 'center',
@@ -1770,9 +2195,12 @@ const styles = StyleSheet.create({
   },
 
   dateControlText: {
+    flex: 1,
+    textAlign: 'center',
     color: '#172033',
     fontSize: 13,
     fontWeight: '700',
+    marginHorizontal: 8,
   },
 
   todayButton: {
@@ -1790,6 +2218,147 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  /* =====================================================
+     TIME PICKER
+     ===================================================== */
+
+  selectedTimeBanner: {
+    minHeight: 62,
+    borderRadius: 17,
+    backgroundColor: '#EAF4FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    gap: 9,
+  },
+
+  selectedTimeText: {
+    color: '#172033',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+
+  timePicker: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+
+  timePickerColumn: {
+    width: 76,
+    minWidth: 0,
+  },
+
+  timePickerLabel: {
+    color: '#98A2B3',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+
+  timeScroll: {
+    height: 235,
+  },
+
+  timeScrollContent: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+
+  timeChoice: {
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+  },
+
+  timeChoiceSelected: {
+    backgroundColor: '#208AEF',
+    borderColor: '#208AEF',
+  },
+
+  timeChoiceText: {
+    color: '#344054',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  timeChoiceTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  periodColumn: {
+    width: 70,
+    minWidth: 0,
+  },
+
+  periodChoices: {
+    gap: 8,
+  },
+
+  periodChoice: {
+    width: 70,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  periodChoiceSelected: {
+    backgroundColor: '#172033',
+    borderColor: '#172033',
+  },
+
+  periodChoiceText: {
+    color: '#344054',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  periodChoiceTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  timeFormatHint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E4E7EC',
+    padding: 12,
+    marginTop: 12,
+  },
+
+  timeFormatHintText: {
+    flex: 1,
+    marginLeft: 8,
+    color: '#667085',
+    fontSize: 11,
+    lineHeight: 17,
+  },
+
+  timeFormatStrong: {
+    color: '#172033',
+    fontWeight: '800',
+  },
+
+  /* =====================================================
+     COMMON MODAL CONTROLS
+     ===================================================== */
+
   modalDoneButton: {
     height: 52,
     borderRadius: 16,
@@ -1803,75 +2372,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
-  },
-
-  timePicker: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 10,
-  },
-
-  timeColumn: {
-  width: 75,
-  maxHeight: 290,
-  gap: 8,
-},
-
-  timeChoice: {
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  timeChoiceSelected: {
-    backgroundColor: '#208AEF',
-  },
-
-  timeChoiceText: {
-    color: '#344054',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  timeChoiceTextSelected: {
-    color: '#FFFFFF',
-  },
-
-  timeSeparator: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#172033',
-  },
-
-  periodColumn: {
-    gap: 8,
-  },
-
-  periodChoice: {
-    width: 62,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  periodChoiceSelected: {
-    backgroundColor: '#172033',
-  },
-
-  periodChoiceText: {
-    color: '#344054',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-
-  periodChoiceTextSelected: {
-    color: '#FFFFFF',
   },
 
   modalOption: {

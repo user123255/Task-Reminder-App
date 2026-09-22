@@ -120,23 +120,23 @@ function todayString() {
   ].join('-');
 }
 
-function parseActivityDate(
-  activity: Activity,
-) {
+function parseActivityDate(activity: Activity) {
   if (!activity.scheduled_date) {
     return null;
   }
 
-  return new Date(
+  const date = new Date(
     `${activity.scheduled_date}T${
       activity.scheduled_time || '00:00:00'
     }`,
   );
+
+  return Number.isNaN(date.getTime())
+    ? null
+    : date;
 }
 
-function formatDate(
-  dateString?: string | null,
-) {
+function formatDate(dateString?: string | null) {
   if (!dateString) {
     return 'No date';
   }
@@ -145,20 +145,19 @@ function formatDate(
     `${dateString}T00:00:00`,
   );
 
-  return date.toLocaleDateString(
-    undefined,
-    {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    },
-  );
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
-function formatTime(
-  value?: string | null,
-) {
+function formatTime(value?: string | null) {
   if (!value) {
     return 'No time';
   }
@@ -174,9 +173,10 @@ function formatTime(
   const suffix = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour % 12 || 12;
 
-  return `${displayHour}:${String(
-    minute,
-  ).padStart(2, '0')} ${suffix}`;
+  return `${displayHour}:${String(minute).padStart(
+    2,
+    '0',
+  )} ${suffix}`;
 }
 
 function isToday(activity: Activity) {
@@ -193,8 +193,7 @@ function isUpcoming(activity: Activity) {
 
   return (
     Boolean(activity.scheduled_date) &&
-    activity.scheduled_date >
-      todayString()
+    activity.scheduled_date! > todayString()
   );
 }
 
@@ -241,28 +240,22 @@ function priorityLabel(
 function categoryIcon(
   activity: Activity,
 ): keyof typeof Ionicons.glyphMap {
-  if (activity.category?.toLowerCase() === 'health') {
+  const category =
+    activity.category?.toLowerCase();
+
+  if (category === 'health') {
     return 'heart-outline';
   }
 
-  if (
-    activity.category?.toLowerCase() ===
-    'spiritual'
-  ) {
+  if (category === 'spiritual') {
     return 'sparkles-outline';
   }
 
-  if (
-    activity.category?.toLowerCase() ===
-    'relationship'
-  ) {
+  if (category === 'relationship') {
     return 'people-outline';
   }
 
-  if (
-    activity.category?.toLowerCase() ===
-    'career'
-  ) {
+  if (category === 'career') {
     return 'briefcase-outline';
   }
 
@@ -326,7 +319,10 @@ function EmptyState({
             onPress={() =>
               router.push('/add-activity')
             }
-            style={styles.emptyButton}
+            style={({ pressed }) => [
+              styles.emptyButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Ionicons
               name="add"
@@ -334,58 +330,12 @@ function EmptyState({
               color={COLORS.white}
             />
 
-            <Text
-              style={styles.emptyButtonText}
-            >
+            <Text style={styles.emptyButtonText}>
               Create Task
             </Text>
           </Pressable>
         )}
     </View>
-  );
-}
-
-function SidebarItem({
-  icon,
-  label,
-  active,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  active?: boolean;
-  onPress?: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.sidebarItem,
-        active &&
-          styles.sidebarItemActive,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={19}
-        color={
-          active
-            ? COLORS.orange
-            : COLORS.muted
-        }
-      />
-
-      <Text
-        style={[
-          styles.sidebarText,
-          active &&
-            styles.sidebarTextActive,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -399,18 +349,10 @@ function TaskCard({
 }: {
   activity: Activity;
   compactMode: boolean;
-  onToggle: (
-    activity: Activity,
-  ) => void;
-  onOpen: (
-    activity: Activity,
-  ) => void;
-  onDelete: (
-    activity: Activity,
-  ) => void;
-  onMove: (
-    activity: Activity,
-  ) => void;
+  onToggle: (activity: Activity) => void;
+  onOpen: (activity: Activity) => void;
+  onDelete: (activity: Activity) => void;
+  onMove: (activity: Activity) => void;
 }) {
   const overdue = isOverdue(activity);
   const color = priorityColor(
@@ -421,20 +363,23 @@ function TaskCard({
     <View
       style={[
         styles.taskCard,
-        compactMode &&
-          styles.taskCardCompact,
-        overdue &&
-          styles.taskCardOverdue,
+        compactMode && styles.taskCardCompact,
+        overdue && styles.taskCardOverdue,
         activity.completed &&
           styles.taskCardCompleted,
       ]}
     >
       <Pressable
         onPress={() => onToggle(activity)}
-        style={[
+        accessibilityRole="checkbox"
+        accessibilityState={{
+          checked: Boolean(activity.completed),
+        }}
+        style={({ pressed }) => [
           styles.checkbox,
           activity.completed &&
             styles.checkboxCompleted,
+          pressed && styles.pressed,
         ]}
       >
         {activity.completed && (
@@ -452,7 +397,6 @@ function TaskCard({
       >
         <View style={styles.taskTitleRow}>
           <Text
-            numberOfLines={2}
             style={[
               styles.taskTitle,
               compactMode &&
@@ -461,7 +405,8 @@ function TaskCard({
                 styles.completedTitle,
             ]}
           >
-            {activity.title}
+            {activity.title ||
+              'Untitled task'}
           </Text>
 
           <View
@@ -476,10 +421,7 @@ function TaskCard({
 
         {!compactMode &&
           activity.description && (
-            <Text
-              numberOfLines={2}
-              style={styles.taskDescription}
-            >
+            <Text style={styles.taskDescription}>
               {activity.description}
             </Text>
           )}
@@ -498,9 +440,11 @@ function TaskCard({
               color={COLORS.orange}
             />
 
-            <Text style={styles.metaText}>
-              {activity.category ||
-                'Other'}
+            <Text
+              style={styles.metaText}
+              numberOfLines={1}
+            >
+              {activity.category || 'Other'}
             </Text>
           </View>
 
@@ -511,7 +455,10 @@ function TaskCard({
               color={COLORS.lightMuted}
             />
 
-            <Text style={styles.metaText}>
+            <Text
+              style={styles.metaText}
+              numberOfLines={1}
+            >
               {formatDate(
                 activity.scheduled_date,
               )}
@@ -526,7 +473,10 @@ function TaskCard({
                 color={COLORS.lightMuted}
               />
 
-              <Text style={styles.metaText}>
+              <Text
+                style={styles.metaText}
+                numberOfLines={1}
+              >
                 {formatTime(
                   activity.scheduled_time,
                 )}
@@ -557,13 +507,9 @@ function TaskCard({
           </View>
 
           {overdue && (
-            <View
-              style={styles.overdueBadge}
-            >
+            <View style={styles.overdueBadge}>
               <Text
-                style={
-                  styles.overdueBadgeText
-                }
+                style={styles.overdueBadgeText}
               >
                 Overdue
               </Text>
@@ -571,13 +517,9 @@ function TaskCard({
           )}
 
           {activity.carried_forward && (
-            <View
-              style={styles.carriedBadge}
-            >
+            <View style={styles.carriedBadge}>
               <Text
-                style={
-                  styles.carriedBadgeText
-                }
+                style={styles.carriedBadgeText}
               >
                 Carried forward
               </Text>
@@ -590,7 +532,11 @@ function TaskCard({
         {overdue && (
           <Pressable
             onPress={() => onMove(activity)}
-            style={styles.actionButton}
+            accessibilityLabel="Move task to tomorrow"
+            style={({ pressed }) => [
+              styles.actionButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Ionicons
               name="arrow-forward-circle-outline"
@@ -602,7 +548,11 @@ function TaskCard({
 
         <Pressable
           onPress={() => onOpen(activity)}
-          style={styles.actionButton}
+          accessibilityLabel="Open task details"
+          style={({ pressed }) => [
+            styles.actionButton,
+            pressed && styles.pressed,
+          ]}
         >
           <Ionicons
             name="ellipsis-horizontal"
@@ -613,9 +563,11 @@ function TaskCard({
 
         <Pressable
           onPress={() => onDelete(activity)}
-          style={[
+          accessibilityLabel="Move task to trash"
+          style={({ pressed }) => [
             styles.actionButton,
             styles.deleteAction,
+            pressed && styles.pressed,
           ]}
         >
           <Ionicons
@@ -634,12 +586,15 @@ export default function TasksScreen() {
     useWindowDimensions();
 
   const { displayName } = useAuth();
+
   const { settings } =
     useTaskFlowSettings();
 
   const compactMode =
     settings.compactMode;
 
+  const mobile = width < 600;
+  const tablet = width >= 600 && width < 1000;
   const desktop = width >= 1000;
 
   const [activities, setActivities] =
@@ -768,15 +723,19 @@ export default function TasksScreen() {
   const counts = useMemo(
     () => ({
       all: activities.length,
+
       today: activities.filter(
         isToday,
       ).length,
+
       upcoming: activities.filter(
         isUpcoming,
       ).length,
+
       overdue: activities.filter(
         isOverdue,
       ).length,
+
       completed: activities.filter(
         (activity) =>
           activity.completed,
@@ -795,34 +754,26 @@ export default function TasksScreen() {
         );
       }
 
-      if (
-        activeFilter === 'upcoming'
-      ) {
+      if (activeFilter === 'upcoming') {
         result = result.filter(
           isUpcoming,
         );
       }
 
-      if (
-        activeFilter === 'overdue'
-      ) {
+      if (activeFilter === 'overdue') {
         result = result.filter(
           isOverdue,
         );
       }
 
-      if (
-        activeFilter === 'completed'
-      ) {
+      if (activeFilter === 'completed') {
         result = result.filter(
           (activity) =>
             activity.completed,
         );
       }
 
-      if (
-        priorityFilter !== 'all'
-      ) {
+      if (priorityFilter !== 'all') {
         result = result.filter(
           (activity) =>
             activity.priority ===
@@ -848,7 +799,7 @@ export default function TasksScreen() {
         result = result.filter(
           (activity) =>
             activity.title
-              .toLowerCase()
+              ?.toLowerCase()
               .includes(query) ||
             activity.description
               ?.toLowerCase()
@@ -902,6 +853,20 @@ export default function TasksScreen() {
       ),
     );
 
+    if (selectedTask?.id === activity.id) {
+      setSelectedTask((current) =>
+        current
+          ? {
+              ...current,
+              completed,
+              completed_at: completed
+                ? new Date().toISOString()
+                : null,
+            }
+          : current,
+      );
+    }
+
     try {
       await updateActivityCompletion(
         activity.id,
@@ -924,6 +889,10 @@ export default function TasksScreen() {
         ),
       );
 
+      if (selectedTask?.id === activity.id) {
+        setSelectedTask(activity);
+      }
+
       showToast(
         'Could not update the task',
       );
@@ -937,6 +906,8 @@ export default function TasksScreen() {
       await moveActivityToTomorrow(
         activity.id,
       );
+
+      setSelectedTask(null);
 
       await loadTasks();
 
@@ -971,6 +942,13 @@ export default function TasksScreen() {
         ),
       );
 
+      if (
+        selectedTask?.id ===
+        deleteTask.id
+      ) {
+        setSelectedTask(null);
+      }
+
       setDeleteTask(null);
 
       showToast(
@@ -999,7 +977,7 @@ export default function TasksScreen() {
     router.push({
       pathname: '/add-activity',
       params: {
-        edit: id,
+        edit: String(id),
       },
     });
   };
@@ -1029,166 +1007,35 @@ export default function TasksScreen() {
 
   return (
     <View style={styles.screen}>
-      {desktop && (
-        <View style={styles.sidebar}>
-          <View style={styles.brand}>
-            <View style={styles.brandLogo}>
+      <View style={styles.main}>
+        {/* TOP BAR */}
+
+        <View
+          style={[
+            styles.topbar,
+            mobile && styles.mobileTopbar,
+            tablet && styles.tabletTopbar,
+          ]}
+        >
+          <Pressable
+            onPress={() =>
+              router.replace('/')
+            }
+            style={[
+              styles.mobileBrand,
+              mobile &&
+                styles.mobileBrandCompact,
+            ]}
+          >
+            <View style={styles.mobileLogo}>
               <Ionicons
                 name="checkmark"
-                size={21}
+                size={18}
                 color={COLORS.white}
               />
             </View>
 
-            <Text style={styles.brandText}>
-              TaskFlow
-            </Text>
-          </View>
-
-          <Text
-            style={styles.workspaceLabel}
-          >
-            WORKSPACE
-          </Text>
-
-          <SidebarItem
-            icon="home-outline"
-            label="Home"
-            onPress={() =>
-              router.replace('/')
-            }
-          />
-
-          <SidebarItem
-            icon="checkmark-circle-outline"
-            label="Tasks"
-            active
-          />
-
-          <SidebarItem
-            icon="calendar-outline"
-            label="Calendar"
-            onPress={() =>
-              router.push('/calendar')
-            }
-          />
-
-          <SidebarItem
-            icon="library-outline"
-            label="Library"
-            onPress={() =>
-              router.push('/library')
-            }
-          />
-
-          <SidebarItem
-            icon="bar-chart-outline"
-            label="Reports"
-            onPress={() =>
-              router.push('/reports')
-            }
-          />
-
-          <SidebarItem
-            icon="sparkles-outline"
-            label="AI Assist"
-            onPress={() =>
-              router.push('/ai-assist')
-            }
-          />
-
-          <SidebarItem
-            icon="videocam-outline"
-            label="Meetings"
-            onPress={() =>
-              router.push('/meetings')
-            }
-          />
-
-          <View
-            style={styles.sidebarSpacer}
-          />
-
-          <SidebarItem
-            icon="trash-outline"
-            label="Trash"
-            onPress={() =>
-              router.push('/trash')
-            }
-          />
-
-          <SidebarItem
-            icon="help-circle-outline"
-            label="Help"
-            onPress={() =>
-              router.push('/help')
-            }
-          />
-
-          <SidebarItem
-            icon="settings-outline"
-            label="Settings"
-            onPress={() =>
-              router.push('/settings')
-            }
-          />
-
-          <View
-            style={styles.profile}
-          >
-            <View style={styles.avatar}>
-              <Text
-                style={styles.avatarText}
-              >
-                {(displayName ||
-                  'N')
-                  .charAt(0)
-                  .toUpperCase()}
-              </Text>
-            </View>
-
-            <View>
-              <Text
-                style={styles.profileName}
-              >
-                {displayName || 'Nyayath'}
-              </Text>
-
-              <Text
-                style={styles.profileCaption}
-              >
-                Personal workspace
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      <View style={styles.main}>
-        <View
-          style={[
-            styles.topbar,
-            !desktop &&
-              styles.mobileTopbar,
-          ]}
-        >
-          {!desktop && (
-            <Pressable
-              onPress={() =>
-                router.replace('/')
-              }
-              style={styles.mobileBrand}
-            >
-              <View
-                style={styles.mobileLogo}
-              >
-                <Ionicons
-                  name="checkmark"
-                  size={18}
-                  color={COLORS.white}
-                />
-              </View>
-
+            {!mobile && (
               <Text
                 style={
                   styles.mobileBrandText
@@ -1196,13 +1043,13 @@ export default function TasksScreen() {
               >
                 TaskFlow
               </Text>
-            </Pressable>
-          )}
+            )}
+          </Pressable>
 
           <View
             style={[
               styles.search,
-              !desktop &&
+              mobile &&
                 styles.mobileSearch,
             ]}
           >
@@ -1220,6 +1067,8 @@ export default function TasksScreen() {
                 COLORS.lightMuted
               }
               style={styles.searchInput}
+              returnKeyType="search"
+              clearButtonMode="never"
             />
 
             {search.length > 0 && (
@@ -1227,24 +1076,31 @@ export default function TasksScreen() {
                 onPress={() =>
                   setSearch('')
                 }
+                accessibilityLabel="Clear search"
               >
                 <Ionicons
                   name="close-circle"
                   size={18}
-                  color={COLORS.lightMuted}
+                  color={
+                    COLORS.lightMuted
+                  }
                 />
               </Pressable>
             )}
           </View>
 
-          <View
-            style={styles.topActions}
-          >
+          <View style={styles.topActions}>
             <Pressable
               onPress={() =>
                 router.push('/ai-assist')
               }
-              style={styles.aiButton}
+              style={({ pressed }) => [
+                styles.aiButton,
+                mobile &&
+                  styles.aiButtonMobile,
+                pressed && styles.pressed,
+              ]}
+              accessibilityLabel="AI Assist"
             >
               <Ionicons
                 name="sparkles"
@@ -1253,9 +1109,7 @@ export default function TasksScreen() {
               />
 
               {desktop && (
-                <Text
-                  style={styles.aiText}
-                >
+                <Text style={styles.aiText}>
                   AI Assist
                 </Text>
               )}
@@ -1265,7 +1119,11 @@ export default function TasksScreen() {
               onPress={() =>
                 router.push('/settings')
               }
-              style={styles.avatarButton}
+              style={({ pressed }) => [
+                styles.avatarButton,
+                pressed && styles.pressed,
+              ]}
+              accessibilityLabel="Open settings"
             >
               <Text
                 style={
@@ -1285,23 +1143,36 @@ export default function TasksScreen() {
           showsVerticalScrollIndicator={
             false
           }
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={refresh}
-              tintColor={
-                COLORS.orange
-              }
+              tintColor={COLORS.orange}
             />
           }
-          contentContainerStyle={
-            styles.content
-          }
+          contentContainerStyle={[
+            styles.content,
+            mobile &&
+              styles.mobileContent,
+            tablet &&
+              styles.tabletContent,
+          ]}
         >
           {/* PAGE HERO */}
 
-          <View style={styles.pageHero}>
-            <View style={styles.heroText}>
+          <View
+            style={[
+              styles.pageHero,
+              mobile &&
+                styles.pageHeroMobile,
+              tablet &&
+                styles.pageHeroTablet,
+            ]}
+          >
+            <View
+              style={styles.heroText}
+            >
               <View
                 style={styles.orangeLine}
               />
@@ -1333,7 +1204,12 @@ export default function TasksScreen() {
                   '/add-activity',
                 )
               }
-              style={styles.newTaskButton}
+              style={({ pressed }) => [
+                styles.newTaskButton,
+                mobile &&
+                  styles.newTaskButtonMobile,
+                pressed && styles.pressed,
+              ]}
             >
               <Ionicons
                 name="add"
@@ -1350,6 +1226,8 @@ export default function TasksScreen() {
               </Text>
             </Pressable>
           </View>
+
+          {/* ERROR */}
 
           {error && (
             <View
@@ -1373,9 +1251,7 @@ export default function TasksScreen() {
                 </Text>
 
                 <Text
-                  style={
-                    styles.errorText
-                  }
+                  style={styles.errorText}
                 >
                   {error}
                 </Text>
@@ -1383,14 +1259,13 @@ export default function TasksScreen() {
 
               <Pressable
                 onPress={loadTasks}
-                style={
-                  styles.retryButton
-                }
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  pressed && styles.pressed,
+                ]}
               >
                 <Text
-                  style={
-                    styles.retryText
-                  }
+                  style={styles.retryText}
                 >
                   Retry
                 </Text>
@@ -1401,7 +1276,11 @@ export default function TasksScreen() {
           {/* STATISTICS */}
 
           <View
-            style={styles.statsGrid}
+            style={[
+              styles.statsGrid,
+              mobile &&
+                styles.statsGridMobile,
+            ]}
           >
             <Stat
               icon="grid-outline"
@@ -1449,7 +1328,11 @@ export default function TasksScreen() {
                 styles.filterHeader
               }
             >
-              <View>
+              <View
+                style={
+                  styles.filterHeaderText
+                }
+              >
                 <View
                   style={
                     styles.sectionLabel
@@ -1505,10 +1388,12 @@ export default function TasksScreen() {
                           filter.key,
                         )
                       }
-                      style={[
+                      style={({ pressed }) => [
                         styles.filterButton,
                         active &&
                           styles.filterButtonActive,
+                        pressed &&
+                          styles.pressed,
                       ]}
                     >
                       <Ionicons
@@ -1567,12 +1452,18 @@ export default function TasksScreen() {
             />
 
             <View
-              style={styles.filterGroup}
+              style={[
+                styles.filterGroup,
+                mobile &&
+                  styles.filterGroupMobile,
+              ]}
             >
               <Text
-                style={
-                  styles.filterGroupTitle
-                }
+                style={[
+                  styles.filterGroupTitle,
+                  mobile &&
+                    styles.filterGroupTitleMobile,
+                ]}
               >
                 Priority
               </Text>
@@ -1581,6 +1472,9 @@ export default function TasksScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={
                   false
+                }
+                contentContainerStyle={
+                  styles.smallFilterScroll
                 }
               >
                 {(
@@ -1619,10 +1513,12 @@ export default function TasksScreen() {
                             key,
                           )
                         }
-                        style={[
+                        style={({ pressed }) => [
                           styles.smallFilter,
                           active &&
                             styles.smallFilterActive,
+                          pressed &&
+                            styles.pressed,
                         ]}
                       >
                         {key !==
@@ -1657,12 +1553,18 @@ export default function TasksScreen() {
             </View>
 
             <View
-              style={styles.filterGroup}
+              style={[
+                styles.filterGroup,
+                mobile &&
+                  styles.filterGroupMobile,
+              ]}
             >
               <Text
-                style={
-                  styles.filterGroupTitle
-                }
+                style={[
+                  styles.filterGroupTitle,
+                  mobile &&
+                    styles.filterGroupTitleMobile,
+                ]}
               >
                 Life Area
               </Text>
@@ -1671,6 +1573,9 @@ export default function TasksScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={
                   false
+                }
+                contentContainerStyle={
+                  styles.smallFilterScroll
                 }
               >
                 {lifeAreas.map(
@@ -1687,10 +1592,12 @@ export default function TasksScreen() {
                             area,
                           )
                         }
-                        style={[
+                        style={({ pressed }) => [
                           styles.smallFilter,
                           active &&
                             styles.smallFilterActive,
+                          pressed &&
+                            styles.pressed,
                         ]}
                       >
                         <Text
@@ -1713,9 +1620,17 @@ export default function TasksScreen() {
           {/* RESULTS */}
 
           <View
-            style={styles.resultsHeader}
+            style={[
+              styles.resultsHeader,
+              mobile &&
+                styles.resultsHeaderMobile,
+            ]}
           >
-            <View>
+            <View
+              style={
+                styles.resultsHeaderText
+              }
+            >
               <View
                 style={
                   styles.sectionLabel
@@ -1765,9 +1680,12 @@ export default function TasksScreen() {
 
             <Pressable
               onPress={refresh}
-              style={
-                styles.refreshButton
-              }
+              style={({ pressed }) => [
+                styles.refreshButton,
+                mobile &&
+                  styles.refreshButtonMobile,
+                pressed && styles.pressed,
+              ]}
             >
               <Ionicons
                 name="refresh-outline"
@@ -1775,13 +1693,15 @@ export default function TasksScreen() {
                 color={COLORS.navy}
               />
 
-              <Text
-                style={
-                  styles.refreshText
-                }
-              >
-                Refresh
-              </Text>
+              {!mobile && (
+                <Text
+                  style={
+                    styles.refreshText
+                  }
+                >
+                  Refresh
+                </Text>
+              )}
             </Pressable>
           </View>
 
@@ -1855,304 +1775,326 @@ export default function TasksScreen() {
 
           {selectedTask && (
             <View
-              style={styles.modal}
+              style={[
+                styles.modal,
+                mobile &&
+                  styles.modalMobile,
+              ]}
             >
-              <View
-                style={
-                  styles.modalHeader
+              <ScrollView
+                showsVerticalScrollIndicator={
+                  false
                 }
+                keyboardShouldPersistTaps="handled"
               >
                 <View
                   style={
-                    styles.modalHeaderText
+                    styles.modalHeader
                   }
                 >
                   <View
                     style={
-                      styles.sectionLabel
+                      styles.modalHeaderText
                     }
                   >
                     <View
                       style={
-                        styles.sectionLabelLine
+                        styles.sectionLabel
+                      }
+                    >
+                      <View
+                        style={
+                          styles.sectionLabelLine
+                        }
+                      />
+
+                      <Text
+                        style={
+                          styles.sectionLabelText
+                        }
+                      >
+                        TASK DETAILS
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={
+                        styles.modalTitle
+                      }
+                    >
+                      {
+                        selectedTask.title ||
+                        'Untitled task'
+                      }
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    onPress={() =>
+                      setSelectedTask(
+                        null,
+                      )
+                    }
+                    style={({ pressed }) => [
+                      styles.closeButton,
+                      pressed &&
+                        styles.pressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={21}
+                      color={
+                        COLORS.muted
                       }
                     />
-
-                    <Text
-                      style={
-                        styles.sectionLabelText
-                      }
-                    >
-                      TASK DETAILS
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={
-                      styles.modalTitle
-                    }
-                  >
-                    {
-                      selectedTask.title
-                    }
-                  </Text>
+                  </Pressable>
                 </View>
 
-                <Pressable
-                  onPress={() =>
-                    setSelectedTask(
-                      null,
-                    )
-                  }
+                <Text
                   style={
-                    styles.closeButton
+                    styles.modalDescription
                   }
                 >
-                  <Ionicons
-                    name="close"
-                    size={21}
-                    color={
-                      COLORS.muted
-                    }
-                  />
-                </Pressable>
-              </View>
+                  {selectedTask.description ||
+                    'No description added for this task.'}
+                </Text>
 
-              <Text
-                style={
-                  styles.modalDescription
-                }
-              >
-                {selectedTask.description ||
-                  'No description added for this task.'}
-              </Text>
-
-              <View
-                style={
-                  styles.detailGrid
-                }
-              >
-                <Detail
-                  icon="grid-outline"
-                  label="Life Area"
-                  value={
-                    selectedTask.category ||
-                    'Other'
-                  }
-                />
-
-                <Detail
-                  icon="calendar-outline"
-                  label="Date"
-                  value={formatDate(
-                    selectedTask.scheduled_date,
-                  )}
-                />
-
-                <Detail
-                  icon="time-outline"
-                  label="Time"
-                  value={formatTime(
-                    selectedTask.scheduled_time,
-                  )}
-                />
-
-                <Detail
-                  icon="flag-outline"
-                  label="Priority"
-                  value={priorityLabel(
-                    selectedTask.priority,
-                  )}
-                />
-
-                <Detail
-                  icon="repeat-outline"
-                  label="Repeat"
-                  value={
-                    selectedTask.repeat ||
-                    'None'
-                  }
-                />
-
-                <Detail
-                  icon="notifications-outline"
-                  label="Reminder"
-                  value={
-                    selectedTask.reminder
-                      ? `${selectedTask.reminder_minutes ?? 15} min before`
-                      : 'Off'
-                  }
-                />
-              </View>
-
-              {isOverdue(
-                selectedTask,
-              ) && (
                 <View
                   style={
-                    styles.warningBox
+                    styles.detailGrid
                   }
                 >
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={22}
-                    color={
-                      COLORS.danger
+                  <Detail
+                    icon="grid-outline"
+                    label="Life Area"
+                    value={
+                      selectedTask.category ||
+                      'Other'
                     }
                   />
 
-                  <View
-                    style={
-                      styles.warningBody
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.warningTitle
-                      }
-                    >
-                      This task is overdue
-                    </Text>
+                  <Detail
+                    icon="calendar-outline"
+                    label="Date"
+                    value={formatDate(
+                      selectedTask.scheduled_date,
+                    )}
+                  />
 
-                    <Text
-                      style={
-                        styles.warningText
-                      }
-                    >
-                      You can move it to tomorrow
-                      or edit its schedule.
-                    </Text>
-                  </View>
+                  <Detail
+                    icon="time-outline"
+                    label="Time"
+                    value={formatTime(
+                      selectedTask.scheduled_time,
+                    )}
+                  />
+
+                  <Detail
+                    icon="flag-outline"
+                    label="Priority"
+                    value={priorityLabel(
+                      selectedTask.priority,
+                    )}
+                  />
+
+                  <Detail
+                    icon="repeat-outline"
+                    label="Repeat"
+                    value={
+                      selectedTask.repeat ||
+                      'None'
+                    }
+                  />
+
+                  <Detail
+                    icon="notifications-outline"
+                    label="Reminder"
+                    value={
+                      selectedTask.reminder
+                        ? `${selectedTask.reminder_minutes ?? 15} min before`
+                        : 'Off'
+                    }
+                  />
                 </View>
-              )}
-
-              <View
-                style={
-                  styles.modalActions
-                }
-              >
-                <Pressable
-                  onPress={editTask}
-                  style={
-                    styles.modalAction
-                  }
-                >
-                  <Ionicons
-                    name="create-outline"
-                    size={18}
-                    color={
-                      COLORS.navy
-                    }
-                  />
-
-                  <Text
-                    style={
-                      styles.modalActionText
-                    }
-                  >
-                    Edit
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() =>
-                    toggleTask(
-                      selectedTask,
-                    )
-                  }
-                  style={
-                    styles.modalAction
-                  }
-                >
-                  <Ionicons
-                    name={
-                      selectedTask.completed
-                        ? 'refresh-outline'
-                        : 'checkmark-outline'
-                    }
-                    size={18}
-                    color={
-                      COLORS.navy
-                    }
-                  />
-
-                  <Text
-                    style={
-                      styles.modalActionText
-                    }
-                  >
-                    {selectedTask.completed
-                      ? 'Reopen'
-                      : 'Complete'}
-                  </Text>
-                </Pressable>
 
                 {isOverdue(
                   selectedTask,
                 ) && (
-                  <Pressable
-                    onPress={() =>
-                      moveTask(
-                        selectedTask,
-                      )
-                    }
+                  <View
                     style={
-                      styles.modalAction
+                      styles.warningBox
                     }
                   >
                     <Ionicons
-                      name="arrow-forward-outline"
+                      name="alert-circle-outline"
+                      size={22}
+                      color={
+                        COLORS.danger
+                      }
+                    />
+
+                    <View
+                      style={
+                        styles.warningBody
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.warningTitle
+                        }
+                      >
+                        This task is overdue
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.warningText
+                        }
+                      >
+                        You can move it to tomorrow
+                        or edit its schedule.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                <View
+                  style={
+                    styles.modalActions
+                  }
+                >
+                  <Pressable
+                    onPress={editTask}
+                    style={({ pressed }) => [
+                      styles.modalAction,
+                      pressed &&
+                        styles.pressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name="create-outline"
                       size={18}
                       color={
-                        COLORS.orange
+                        COLORS.navy
                       }
                     />
 
                     <Text
-                      style={[
-                        styles.modalActionText,
-                        {
-                          color:
-                            COLORS.orange,
-                        },
-                      ]}
+                      style={
+                        styles.modalActionText
+                      }
                     >
-                      Tomorrow
+                      Edit
                     </Text>
                   </Pressable>
-                )}
 
-                <Pressable
-                  onPress={() => {
-                    setSelectedTask(
-                      null,
-                    );
-                    setDeleteTask(
-                      selectedTask,
-                    );
-                  }}
-                  style={[
-                    styles.modalAction,
-                    styles.modalDangerAction,
-                  ]}
-                >
-                  <Ionicons
-                    name="trash-outline"
-                    size={18}
-                    color={
-                      COLORS.danger
+                  <Pressable
+                    onPress={() =>
+                      toggleTask(
+                        selectedTask,
+                      )
                     }
-                  />
-
-                  <Text
-                    style={
-                      styles.modalDangerText
-                    }
+                    style={({ pressed }) => [
+                      styles.modalAction,
+                      pressed &&
+                        styles.pressed,
+                    ]}
                   >
-                    Trash
-                  </Text>
-                </Pressable>
-              </View>
+                    <Ionicons
+                      name={
+                        selectedTask.completed
+                          ? 'refresh-outline'
+                          : 'checkmark-outline'
+                      }
+                      size={18}
+                      color={
+                        COLORS.navy
+                      }
+                    />
+
+                    <Text
+                      style={
+                        styles.modalActionText
+                      }
+                    >
+                      {selectedTask.completed
+                        ? 'Reopen'
+                        : 'Complete'}
+                    </Text>
+                  </Pressable>
+
+                  {isOverdue(
+                    selectedTask,
+                  ) && (
+                    <Pressable
+                      onPress={() =>
+                        moveTask(
+                          selectedTask,
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.modalAction,
+                        pressed &&
+                          styles.pressed,
+                      ]}
+                    >
+                      <Ionicons
+                        name="arrow-forward-outline"
+                        size={18}
+                        color={
+                          COLORS.orange
+                        }
+                      />
+
+                      <Text
+                        style={[
+                          styles.modalActionText,
+                          {
+                            color:
+                              COLORS.orange,
+                          },
+                        ]}
+                      >
+                        Tomorrow
+                      </Text>
+                    </Pressable>
+                  )}
+
+                  <Pressable
+                    onPress={() => {
+                      setSelectedTask(
+                        null,
+                      );
+                      setDeleteTask(
+                        selectedTask,
+                      );
+                    }}
+                    style={({ pressed }) => [
+                      styles.modalAction,
+                      styles.modalDangerAction,
+                      pressed &&
+                        styles.pressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color={
+                        COLORS.danger
+                      }
+                    />
+
+                    <Text
+                      style={
+                        styles.modalDangerText
+                      }
+                    >
+                      Trash
+                    </Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
             </View>
           )}
         </View>
@@ -2184,9 +2126,11 @@ export default function TasksScreen() {
 
           {deleteTask && (
             <View
-              style={
-                styles.confirmModal
-              }
+              style={[
+                styles.confirmModal,
+                mobile &&
+                  styles.confirmModalMobile,
+              ]}
             >
               <View
                 style={
@@ -2225,12 +2169,12 @@ export default function TasksScreen() {
                 }
               >
                 <Text
-                  numberOfLines={2}
                   style={
                     styles.confirmTaskTitle
                   }
                 >
-                  {deleteTask.title}
+                  {deleteTask.title ||
+                    'Untitled task'}
                 </Text>
 
                 <Text
@@ -2249,9 +2193,11 @@ export default function TasksScreen() {
               </View>
 
               <View
-                style={
-                  styles.confirmActions
-                }
+                style={[
+                  styles.confirmActions,
+                  mobile &&
+                    styles.confirmActionsMobile,
+                ]}
               >
                 <Pressable
                   onPress={() =>
@@ -2259,9 +2205,11 @@ export default function TasksScreen() {
                       null,
                     )
                   }
-                  style={
-                    styles.cancelButton
-                  }
+                  style={({ pressed }) => [
+                    styles.cancelButton,
+                    pressed &&
+                      styles.pressed,
+                  ]}
                 >
                   <Text
                     style={
@@ -2277,10 +2225,13 @@ export default function TasksScreen() {
                   onPress={
                     confirmDelete
                   }
-                  style={[
+                  style={({ pressed }) => [
                     styles.deleteConfirmButton,
                     deleting &&
                       styles.disabled,
+                    pressed &&
+                      !deleting &&
+                      styles.pressed,
                   ]}
                 >
                   {deleting ? (
@@ -2318,7 +2269,11 @@ export default function TasksScreen() {
 
       {toast && (
         <View
-          style={styles.toast}
+          style={[
+            styles.toast,
+            mobile &&
+              styles.toastMobile,
+          ]}
         >
           <View
             style={styles.toastIcon}
@@ -2392,6 +2347,7 @@ function Stat({
 
       <Text
         style={styles.statLabel}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -2419,9 +2375,7 @@ function Detail({
   value: string;
 }) {
   return (
-    <View
-      style={styles.detail}
-    >
+    <View style={styles.detail}>
       <View
         style={styles.detailIcon}
       >
@@ -2443,7 +2397,7 @@ function Detail({
 
         <Text
           style={styles.detailValue}
-          numberOfLines={2}
+          numberOfLines={3}
         >
           {value}
         </Text>
@@ -2455,7 +2409,6 @@ function Detail({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    flexDirection: 'row',
     backgroundColor:
       COLORS.background,
   },
@@ -2466,6 +2419,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor:
       COLORS.background,
+    padding: 24,
   },
 
   loadingLogo: {
@@ -2483,119 +2437,7 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 12,
     marginTop: 10,
-  },
-
-  sidebar: {
-    width: 248,
-    backgroundColor:
-      COLORS.white,
-    borderRightWidth: 1,
-    borderRightColor:
-      COLORS.border,
-    paddingHorizontal: 15,
-    paddingTop: 25,
-    paddingBottom: 18,
-  },
-
-  brand: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    marginBottom: 38,
-  },
-
-  brandLogo: {
-    width: 39,
-    height: 39,
-    borderRadius: 11,
-    backgroundColor:
-      COLORS.navy,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  brandText: {
-    marginLeft: 10,
-    color: COLORS.navy,
-    fontSize: 21,
-    fontWeight: '900',
-  },
-
-  workspaceLabel: {
-    color: COLORS.lightMuted,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1.4,
-    marginHorizontal: 10,
-    marginBottom: 9,
-  },
-
-  sidebarItem: {
-    height: 45,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    marginBottom: 4,
-  },
-
-  sidebarItemActive: {
-    backgroundColor:
-      COLORS.orangeSoft,
-  },
-
-  sidebarText: {
-    marginLeft: 12,
-    color: COLORS.muted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
-  sidebarTextActive: {
-    color: COLORS.navy,
-    fontWeight: '900',
-  },
-
-  sidebarSpacer: {
-    flex: 1,
-  },
-
-  profile: {
-    borderTopWidth: 1,
-    borderTopColor:
-      COLORS.border,
-    paddingTop: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-
-  avatar: {
-    width: 39,
-    height: 39,
-    borderRadius: 11,
-    backgroundColor:
-      COLORS.orangeSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  avatarText: {
-    color: COLORS.orange,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-
-  profileName: {
-    color: COLORS.navy,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-
-  profileCaption: {
-    color: COLORS.muted,
-    fontSize: 9,
-    marginTop: 2,
+    textAlign: 'center',
   },
 
   main: {
@@ -2617,12 +2459,23 @@ const styles = StyleSheet.create({
   },
 
   mobileTopbar: {
-    paddingHorizontal: 13,
+    minHeight: 66,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+
+  tabletTopbar: {
+    paddingHorizontal: 16,
   },
 
   mobileBrand: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
+  },
+
+  mobileBrandCompact: {
+    width: 35,
   },
 
   mobileLogo: {
@@ -2644,6 +2497,7 @@ const styles = StyleSheet.create({
 
   search: {
     flex: 1,
+    minWidth: 0,
     maxWidth: 680,
     height: 43,
     borderWidth: 1,
@@ -2658,11 +2512,14 @@ const styles = StyleSheet.create({
   },
 
   mobileSearch: {
-    minWidth: 0,
+    height: 40,
+    paddingHorizontal: 10,
+    borderRadius: 9,
   },
 
   searchInput: {
     flex: 1,
+    minWidth: 0,
     marginLeft: 9,
     color: COLORS.text,
     fontSize: 12,
@@ -2670,10 +2527,10 @@ const styles = StyleSheet.create({
   } as any,
 
   topActions: {
-    marginLeft: 'auto',
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
+    gap: 8,
   },
 
   aiButton: {
@@ -2686,6 +2543,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+  },
+
+  aiButtonMobile: {
+    width: 40,
+    height: 40,
+    paddingHorizontal: 0,
+    borderRadius: 10,
   },
 
   aiText: {
@@ -2718,6 +2582,16 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  mobileContent: {
+    padding: 14,
+    paddingBottom: 30,
+  },
+
+  tabletContent: {
+    padding: 18,
+    paddingBottom: 35,
+  },
+
   pageHero: {
     minHeight: 205,
     borderRadius: 21,
@@ -2731,8 +2605,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
+  pageHeroTablet: {
+    padding: 23,
+  },
+
+  pageHeroMobile: {
+    minHeight: 0,
+    padding: 20,
+    borderRadius: 18,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+
   heroText: {
     flex: 1,
+    minWidth: 0,
   },
 
   orangeLine: {
@@ -2768,15 +2655,24 @@ const styles = StyleSheet.create({
   },
 
   newTaskButton: {
-    height: 45,
+    minHeight: 45,
     paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor:
       COLORS.orange,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     marginLeft: 20,
+    flexShrink: 0,
+  },
+
+  newTaskButtonMobile: {
+    marginLeft: 0,
+    marginTop: 18,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 15,
   },
 
   newTaskText: {
@@ -2800,6 +2696,7 @@ const styles = StyleSheet.create({
 
   errorBody: {
     flex: 1,
+    minWidth: 0,
   },
 
   errorTitle: {
@@ -2811,6 +2708,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.muted,
     fontSize: 10,
+    lineHeight: 15,
     marginTop: 3,
   },
 
@@ -2820,6 +2718,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     paddingHorizontal: 11,
     paddingVertical: 8,
+    flexShrink: 0,
   },
 
   retryText: {
@@ -2833,6 +2732,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
     marginBottom: 22,
+  },
+
+  statsGridMobile: {
+    gap: 9,
   },
 
   statCard: {
@@ -2889,6 +2792,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+  filterHeaderText: {
+    minWidth: 0,
+  },
+
   sectionLabel: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2919,6 +2826,7 @@ const styles = StyleSheet.create({
 
   filterScroll: {
     gap: 7,
+    paddingRight: 4,
   },
 
   filterButton: {
@@ -2984,6 +2892,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 11,
+    minWidth: 0,
+  },
+
+  filterGroupMobile: {
+    alignItems: 'flex-start',
   },
 
   filterGroupTitle: {
@@ -2991,6 +2904,16 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
     fontSize: 10,
     fontWeight: '900',
+    flexShrink: 0,
+    paddingTop: 9,
+  },
+
+  filterGroupTitleMobile: {
+    width: 68,
+  },
+
+  smallFilterScroll: {
+    paddingRight: 4,
   },
 
   smallFilter: {
@@ -3002,6 +2925,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
   },
 
@@ -3034,7 +2958,17 @@ const styles = StyleSheet.create({
     justifyContent:
       'space-between',
     alignItems: 'flex-end',
+    gap: 12,
     marginBottom: 13,
+  },
+
+  resultsHeaderMobile: {
+    alignItems: 'flex-start',
+  },
+
+  resultsHeaderText: {
+    flex: 1,
+    minWidth: 0,
   },
 
   resultsTitle: {
@@ -3046,6 +2980,7 @@ const styles = StyleSheet.create({
   resultsSubtitle: {
     color: COLORS.muted,
     fontSize: 10,
+    lineHeight: 15,
     marginTop: 3,
   },
 
@@ -3060,7 +2995,14 @@ const styles = StyleSheet.create({
       COLORS.white,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
+    flexShrink: 0,
+  },
+
+  refreshButtonMobile: {
+    width: 36,
+    paddingHorizontal: 0,
   },
 
   refreshText: {
@@ -3083,6 +3025,7 @@ const styles = StyleSheet.create({
     padding: 15,
     flexDirection: 'row',
     alignItems: 'flex-start',
+    minWidth: 0,
   },
 
   taskCardCompact: {
@@ -3107,6 +3050,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 11,
     marginTop: 2,
+    flexShrink: 0,
   },
 
   checkboxCompleted: {
@@ -3124,10 +3068,12 @@ const styles = StyleSheet.create({
   taskTitleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    minWidth: 0,
   },
 
   taskTitle: {
     flex: 1,
+    minWidth: 0,
     color: COLORS.navy,
     fontSize: 13,
     lineHeight: 19,
@@ -3136,6 +3082,7 @@ const styles = StyleSheet.create({
 
   taskTitleCompact: {
     fontSize: 12,
+    lineHeight: 18,
   },
 
   completedTitle: {
@@ -3150,6 +3097,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginTop: 6,
     marginLeft: 8,
+    flexShrink: 0,
   },
 
   taskDescription: {
@@ -3176,12 +3124,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    maxWidth: '100%',
   },
 
   metaText: {
     color: COLORS.muted,
     fontSize: 9,
     fontWeight: '700',
+    flexShrink: 1,
   },
 
   badgeRow: {
@@ -3235,6 +3185,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     marginLeft: 8,
+    flexShrink: 0,
   },
 
   actionButton: {
@@ -3280,6 +3231,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '900',
     marginTop: 12,
+    textAlign: 'center',
   },
 
   emptyDescription: {
@@ -3292,13 +3244,14 @@ const styles = StyleSheet.create({
   },
 
   emptyButton: {
-    height: 39,
+    minHeight: 39,
     paddingHorizontal: 13,
     borderRadius: 8,
     backgroundColor:
       COLORS.orange,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
     marginTop: 14,
   },
@@ -3333,24 +3286,34 @@ const styles = StyleSheet.create({
   modal: {
     width: '100%',
     maxWidth: 650,
+    maxHeight: '90%',
     backgroundColor:
       COLORS.white,
     borderRadius: 22,
     padding: 23,
   },
 
+  modalMobile: {
+    maxHeight: '88%',
+    borderRadius: 18,
+    padding: 18,
+  },
+
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    gap: 12,
   },
 
   modalHeaderText: {
     flex: 1,
+    minWidth: 0,
   },
 
   modalTitle: {
     color: COLORS.navy,
     fontSize: 23,
+    lineHeight: 29,
     fontWeight: '900',
     marginTop: 3,
   },
@@ -3363,6 +3326,7 @@ const styles = StyleSheet.create({
       '#F4F6F8',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
 
   modalDescription: {
@@ -3399,10 +3363,12 @@ const styles = StyleSheet.create({
       COLORS.orangeSoft,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
 
   detailBody: {
     flex: 1,
+    minWidth: 0,
   },
 
   detailLabel: {
@@ -3414,6 +3380,7 @@ const styles = StyleSheet.create({
   detailValue: {
     color: COLORS.navy,
     fontSize: 10,
+    lineHeight: 14,
     fontWeight: '900',
     marginTop: 3,
   },
@@ -3433,6 +3400,7 @@ const styles = StyleSheet.create({
 
   warningBody: {
     flex: 1,
+    minWidth: 0,
   },
 
   warningTitle: {
@@ -3444,6 +3412,7 @@ const styles = StyleSheet.create({
   warningText: {
     color: COLORS.muted,
     fontSize: 9,
+    lineHeight: 14,
     marginTop: 2,
   },
 
@@ -3452,6 +3421,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 7,
     marginTop: 18,
+    paddingBottom: 2,
   },
 
   modalAction: {
@@ -3462,6 +3432,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
   },
 
@@ -3492,6 +3463,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  confirmModalMobile: {
+    maxWidth: '100%',
+    padding: 20,
+    borderRadius: 18,
+  },
+
   confirmIcon: {
     width: 58,
     height: 58,
@@ -3505,8 +3482,10 @@ const styles = StyleSheet.create({
   confirmTitle: {
     color: COLORS.navy,
     fontSize: 20,
+    lineHeight: 26,
     fontWeight: '900',
     marginTop: 13,
+    textAlign: 'center',
   },
 
   confirmText: {
@@ -3530,12 +3509,14 @@ const styles = StyleSheet.create({
   confirmTaskTitle: {
     color: COLORS.navy,
     fontSize: 11,
+    lineHeight: 16,
     fontWeight: '900',
   },
 
   confirmTaskMeta: {
     color: COLORS.muted,
     fontSize: 9,
+    lineHeight: 14,
     marginTop: 3,
   },
 
@@ -3546,9 +3527,13 @@ const styles = StyleSheet.create({
     marginTop: 17,
   },
 
+  confirmActionsMobile: {
+    flexDirection: 'column-reverse',
+  },
+
   cancelButton: {
     flex: 1,
-    height: 45,
+    minHeight: 45,
     borderRadius: 9,
     backgroundColor:
       '#EEF1F4',
@@ -3564,7 +3549,7 @@ const styles = StyleSheet.create({
 
   deleteConfirmButton: {
     flex: 1,
-    height: 45,
+    minHeight: 45,
     borderRadius: 9,
     backgroundColor:
       COLORS.danger,
@@ -3572,12 +3557,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    paddingHorizontal: 12,
   },
 
   deleteConfirmText: {
     color: COLORS.white,
     fontSize: 10,
     fontWeight: '900',
+    textAlign: 'center',
   },
 
   disabled: {
@@ -3608,6 +3595,13 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
+  toastMobile: {
+    left: 14,
+    right: 14,
+    bottom: 18,
+    maxWidth: undefined,
+  },
+
   toastIcon: {
     width: 27,
     height: 27,
@@ -3616,11 +3610,14 @@ const styles = StyleSheet.create({
       COLORS.orange,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
 
   toastText: {
+    flex: 1,
     color: COLORS.white,
     fontSize: 10,
+    lineHeight: 15,
     fontWeight: '800',
   },
 

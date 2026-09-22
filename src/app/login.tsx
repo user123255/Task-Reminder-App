@@ -10,11 +10,42 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { supabase } from '@/utils/supabase';
 
+const COLORS = {
+  navy: '#071A2F',
+  navy2: '#0B2239',
+  navy3: '#102E4A',
+
+  orange: '#FF7A00',
+  orangeDark: '#E76500',
+  orangeSoft: '#FFF1E5',
+
+  background: '#F5F6F8',
+  white: '#FFFFFF',
+
+  text: '#172033',
+  muted: '#667085',
+  lightMuted: '#98A2B3',
+
+  border: '#E2E6EB',
+
+  success: '#15803D',
+  successSoft: '#ECFDF3',
+
+  danger: '#C62828',
+  dangerSoft: '#FFF0F0',
+};
+
 export default function LoginScreen() {
+  const { width } = useWindowDimensions();
+
+  const isSmallScreen = width < 420;
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -26,10 +57,6 @@ export default function LoginScreen() {
   const [successMessage, setSuccessMessage] = useState('');
 
   const handleLogin = async () => {
-    if (loading) {
-      return;
-    }
-
     setErrorMessage('');
     setSuccessMessage('');
 
@@ -37,11 +64,6 @@ export default function LoginScreen() {
 
     if (!cleanEmail) {
       setErrorMessage('Please enter your email address.');
-      return;
-    }
-
-    if (!cleanEmail.includes('@')) {
-      setErrorMessage('Please enter a valid email address.');
       return;
     }
 
@@ -64,112 +86,108 @@ export default function LoginScreen() {
         });
 
       if (error) {
-        console.error('LOGIN ERROR:', error);
-
-        const normalizedMessage =
-          error.message.toLowerCase();
-
-        if (
-          normalizedMessage.includes(
-            'invalid login credentials'
-          )
-        ) {
-          setErrorMessage(
-            'The email or password is incorrect. Please check your password and try again.'
-          );
-        } else if (
-          normalizedMessage.includes(
-            'email not confirmed'
-          )
-        ) {
-          setErrorMessage(
-            'Your email address has not been confirmed yet.'
-          );
-        } else if (
-          normalizedMessage.includes(
-            'too many requests'
-          )
-        ) {
-          setErrorMessage(
-            'Too many login attempts. Please wait a moment and try again.'
-          );
-        } else {
-          setErrorMessage(error.message);
-        }
-
-        return;
+        throw error;
       }
 
-      if (!data.user || !data.session) {
-        setErrorMessage(
-          'Login did not create an active session. Please try again.'
+      if (!data.user) {
+        throw new Error(
+          'Unable to sign in. Please check your account and try again.',
         );
-        return;
       }
 
-      console.log('LOGIN SUCCESS');
+      if (!data.session) {
+        throw new Error(
+          'Your account was authenticated, but no active session was created.',
+        );
+      }
+
+      console.log('LOGIN AUTHENTICATED');
       console.log('User ID:', data.user.id);
       console.log('Email:', data.user.email);
-      console.log('Session exists:', Boolean(data.session));
-      console.log('==============================');
 
-      /**
-       * Supabase already persists the session through
-       * the configuration in utils/supabase.ts.
-       *
-       * Remember-me is therefore only stored as a preference
-       * for future app behavior.
-       */
+      const {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (!sessionData.session) {
+        throw new Error(
+          'Login succeeded, but your session could not be stored. Please try again.',
+        );
+      }
+
+      console.log('SESSION VERIFIED');
+      console.log('Session user:', sessionData.session.user.id);
+
       if (Platform.OS === 'web') {
         try {
           if (rememberMe) {
-            window.localStorage.setItem(
+            localStorage.setItem(
               'task_reminder_remember_me',
-              'true'
+              'true',
             );
           } else {
-            window.localStorage.removeItem(
-              'task_reminder_remember_me'
+            localStorage.removeItem(
+              'task_reminder_remember_me',
             );
           }
         } catch (storageError) {
           console.warn(
             'Could not save remember-me preference:',
-            storageError
+            storageError,
           );
         }
       }
 
+      console.log('LOGIN SUCCESS');
+      console.log('==============================');
+
       setSuccessMessage(
-        'Welcome back! Opening your dashboard...'
+        'Welcome back! Opening your dashboard...',
       );
 
-      /**
-       * The AuthProvider receives the SIGNED_IN event
-       * from Supabase. A small delay prevents the router
-       * from racing the authentication state update.
-       */
       setTimeout(() => {
         router.replace('/');
-      }, 150);
+      }, 300);
     } catch (error) {
       console.error('LOGIN ERROR:', error);
+
+      let message =
+        'Unable to sign in. Please check your email and password.';
 
       if (
         typeof error === 'object' &&
         error !== null &&
         'message' in error
       ) {
-        const message = String(
-          (error as { message: unknown }).message
+        const errorMessage = String(
+          (error as { message: unknown }).message,
         );
 
-        setErrorMessage(message);
-      } else {
-        setErrorMessage(
-          'Unable to sign in. Please try again.'
-        );
+        if (
+          errorMessage
+            .toLowerCase()
+            .includes('invalid login credentials')
+        ) {
+          message =
+            'The email or password is incorrect. Please check your details or reset your password.';
+        } else if (
+          errorMessage
+            .toLowerCase()
+            .includes('email not confirmed')
+        ) {
+          message =
+            'Please confirm your email address before signing in.';
+        } else {
+          message = errorMessage;
+        }
       }
+
+      setErrorMessage(message);
     } finally {
       setLoading(false);
     }
@@ -179,233 +197,334 @@ export default function LoginScreen() {
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={
-        Platform.OS === 'ios' ? 'padding' : undefined
+        Platform.OS === 'ios'
+          ? 'padding'
+          : undefined
       }
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isSmallScreen &&
+            styles.scrollContentSmall,
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>✓</Text>
-          </View>
+        <View
+          style={[
+            styles.page,
+            isSmallScreen && styles.pageSmall,
+          ]}
+        >
+          {/* BRAND HERO */}
 
-          <Text style={styles.brandName}>
-            Task Reminder
-          </Text>
-
-          <Text style={styles.heroText}>
-            Stay focused, organized, and intentional
-            with your day.
-          </Text>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.headerIcon}>
-            <View style={styles.headerDot} />
-          </View>
-
-          <Text style={styles.title}>
-            Welcome back
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Sign in to continue managing your tasks.
-          </Text>
-
-          {errorMessage ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorTitle}>
-                Sign in failed
-              </Text>
-
-              <Text style={styles.errorText}>
-                {errorMessage}
-              </Text>
-            </View>
-          ) : null}
-
-          {successMessage ? (
-            <View style={styles.successBox}>
-              <Text style={styles.successText}>
-                {successMessage}
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={styles.field}>
-            <Text style={styles.label}>
-              Email address
-            </Text>
-
-            <View
-              style={[
-                styles.inputWrapper,
-                email.length > 0 &&
-                  styles.inputWrapperActive,
-              ]}
-            >
-              <Text style={styles.inputIcon}>@</Text>
-
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor="#98A2B3"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                editable={!loading}
-                style={styles.input}
-                returnKeyType="next"
+          <View style={styles.hero}>
+            <View style={styles.logo}>
+              <Ionicons
+                name="checkmark"
+                size={29}
+                color={COLORS.white}
               />
             </View>
-          </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>
-              Password
+            <Text style={styles.brandName}>
+              TaskFlow
             </Text>
 
-            <View
-              style={[
-                styles.inputWrapper,
-                password.length > 0 &&
-                  styles.inputWrapperActive,
-              ]}
-            >
-              <Text style={styles.inputIcon}>•</Text>
+            <Text style={styles.heroText}>
+              Stay focused, organized, and intentional
+              with your day.
+            </Text>
+          </View>
 
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor="#98A2B3"
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="current-password"
-                editable={!loading}
+          {/* LOGIN CARD */}
+
+          <View style={styles.card}>
+            <View style={styles.orangeLine} />
+
+            <Text style={styles.eyebrow}>
+              WELCOME BACK
+            </Text>
+
+            <Text style={styles.title}>
+              Sign in to TaskFlow
+            </Text>
+
+            <Text style={styles.subtitle}>
+              Continue managing your tasks, schedule,
+              and productivity in one place.
+            </Text>
+
+            {/* ERROR */}
+
+            {errorMessage ? (
+              <View style={styles.errorBox}>
+                <View style={styles.errorIcon}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={19}
+                    color={COLORS.danger}
+                  />
+                </View>
+
+                <View style={styles.messageBody}>
+                  <Text style={styles.errorTitle}>
+                    Sign in failed
+                  </Text>
+
+                  <Text style={styles.errorText}>
+                    {errorMessage}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* SUCCESS */}
+
+            {successMessage ? (
+              <View style={styles.successBox}>
+                <View style={styles.successIcon}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={19}
+                    color={COLORS.success}
+                  />
+                </View>
+
+                <Text style={styles.successText}>
+                  {successMessage}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* EMAIL */}
+
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Email address
+              </Text>
+
+              <View
                 style={[
-                  styles.input,
-                  styles.passwordInput,
+                  styles.inputWrapper,
+                  email.length > 0 &&
+                    styles.inputWrapperActive,
                 ]}
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-              />
+              >
+                <View style={styles.inputIconBox}>
+                  <Ionicons
+                    name="mail-outline"
+                    size={18}
+                    color={
+                      email.length > 0
+                        ? COLORS.orange
+                        : COLORS.lightMuted
+                    }
+                  />
+                </View>
 
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor={
+                    COLORS.lightMuted
+                  }
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  editable={!loading}
+                  style={styles.input}
+                />
+              </View>
+            </View>
+
+            {/* PASSWORD */}
+
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Password
+              </Text>
+
+              <View
+                style={[
+                  styles.inputWrapper,
+                  password.length > 0 &&
+                    styles.inputWrapperActive,
+                ]}
+              >
+                <View style={styles.inputIconBox}>
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={18}
+                    color={
+                      password.length > 0
+                        ? COLORS.orange
+                        : COLORS.lightMuted
+                    }
+                  />
+                </View>
+
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter your password"
+                  placeholderTextColor={
+                    COLORS.lightMuted
+                  }
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="current-password"
+                  editable={!loading}
+                  style={styles.input}
+                />
+
+                <Pressable
+                  onPress={() =>
+                    setShowPassword(
+                      current => !current,
+                    )
+                  }
+                  disabled={loading}
+                  style={styles.eyeButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    showPassword
+                      ? 'Hide password'
+                      : 'Show password'
+                  }
+                >
+                  <Ionicons
+                    name={
+                      showPassword
+                        ? 'eye-off-outline'
+                        : 'eye-outline'
+                    }
+                    size={19}
+                    color={COLORS.muted}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* OPTIONS */}
+
+            <View
+              style={[
+                styles.optionsRow,
+                isSmallScreen &&
+                  styles.optionsRowSmall,
+              ]}
+            >
               <Pressable
                 onPress={() =>
-                  setShowPassword(
-                    (current) => !current
+                  setRememberMe(
+                    current => !current,
                   )
                 }
                 disabled={loading}
-                style={styles.eyeButton}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  showPassword
-                    ? 'Hide password'
-                    : 'Show password'
-                }
+                style={styles.rememberRow}
               >
-                <Text style={styles.eyeText}>
-                  {showPassword ? 'Hide' : 'Show'}
+                <View
+                  style={[
+                    styles.checkbox,
+                    rememberMe &&
+                      styles.checkboxChecked,
+                  ]}
+                >
+                  {rememberMe && (
+                    <Ionicons
+                      name="checkmark"
+                      size={12}
+                      color={COLORS.white}
+                    />
+                  )}
+                </View>
+
+                <Text style={styles.rememberText}>
+                  Remember me
                 </Text>
               </Pressable>
+
+              <Link
+                href="/forgot-password"
+                asChild
+              >
+                <Pressable disabled={loading}>
+                  <Text style={styles.forgotText}>
+                    Forgot password?
+                  </Text>
+                </Pressable>
+              </Link>
+            </View>
+
+            {/* SIGN IN */}
+
+            <Pressable
+              onPress={handleLogin}
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.button,
+                pressed &&
+                  !loading &&
+                  styles.buttonPressed,
+                loading &&
+                  styles.buttonDisabled,
+              ]}
+            >
+              {loading ? (
+                <>
+                  <ActivityIndicator
+                    color={COLORS.white}
+                    size="small"
+                  />
+
+                  <Text style={styles.buttonText}>
+                    Signing in...
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.buttonText}>
+                    Sign in
+                  </Text>
+
+                  <Ionicons
+                    name="arrow-forward"
+                    size={18}
+                    color={COLORS.white}
+                  />
+                </>
+              )}
+            </Pressable>
+
+            {/* REGISTER */}
+
+            <View style={styles.registerSection}>
+              <Text style={styles.registerText}>
+                Don't have an account?
+              </Text>
+
+              <Link
+                href="/signup"
+                asChild
+              >
+                <Pressable disabled={loading}>
+                  <Text style={styles.registerLink}>
+                    Create account →
+                  </Text>
+                </Pressable>
+              </Link>
             </View>
           </View>
 
-          <View style={styles.optionsRow}>
-            <Pressable
-              onPress={() =>
-                setRememberMe(
-                  (current) => !current
-                )
-              }
-              disabled={loading}
-              style={styles.rememberRow}
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  rememberMe &&
-                    styles.checkboxChecked,
-                ]}
-              >
-                {rememberMe ? (
-                  <Text style={styles.checkmark}>
-                    ✓
-                  </Text>
-                ) : null}
-              </View>
-
-              <Text style={styles.rememberText}>
-                Remember me
-              </Text>
-            </Pressable>
-
-            <Link href="/forgot-password" asChild>
-              <Pressable disabled={loading}>
-                <Text style={styles.forgotText}>
-                  Forgot password?
-                </Text>
-              </Pressable>
-            </Link>
-          </View>
-
-          <Pressable
-            onPress={handleLogin}
-            disabled={loading}
-            style={({ pressed }) => [
-              styles.button,
-              pressed &&
-                !loading &&
-                styles.buttonPressed,
-              loading &&
-                styles.buttonDisabled,
-            ]}
-          >
-            {loading ? (
-              <>
-                <ActivityIndicator color="#FFFFFF" />
-
-                <Text style={styles.buttonText}>
-                  Signing in...
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.buttonText}>
-                  Sign in
-                </Text>
-
-                <Text style={styles.arrow}>→</Text>
-              </>
-            )}
-          </Pressable>
-
-          <View style={styles.registerSection}>
-            <Text style={styles.registerText}>
-              Don't have an account?
-            </Text>
-
-            <Link href="/signup" asChild>
-              <Pressable disabled={loading}>
-                <Text style={styles.registerLink}>
-                  Create account →
-                </Text>
-              </Pressable>
-            </Link>
-          </View>
+          <Text style={styles.footer}>
+            TaskFlow © 2026
+          </Text>
         </View>
-
-        <Text style={styles.footer}>
-          Task Reminder © 2026
-        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -414,219 +533,248 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F6F8FC',
+    backgroundColor: COLORS.background,
   },
 
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 40,
+    paddingVertical: 36,
+  },
+
+  scrollContentSmall: {
+    paddingHorizontal: 14,
+    paddingVertical: 24,
+  },
+
+  page: {
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+  },
+
+  pageSmall: {
+    maxWidth: 500,
   },
 
   hero: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 25,
   },
 
   logo: {
-    width: 58,
-    height: 58,
+    width: 60,
+    height: 60,
     borderRadius: 18,
-    backgroundColor: '#208AEF',
+    backgroundColor: COLORS.navy,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-    shadowColor: '#208AEF',
+    marginBottom: 11,
+    shadowColor: COLORS.navy,
     shadowOffset: {
       width: 0,
       height: 8,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
+    shadowOpacity: 0.18,
+    shadowRadius: 15,
     elevation: 6,
   },
 
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '900',
-  },
-
   brandName: {
-    color: '#172033',
-    fontSize: 20,
+    color: COLORS.navy,
+    fontSize: 22,
     fontWeight: '900',
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
 
   heroText: {
-    color: '#667085',
-    fontSize: 14,
-    lineHeight: 21,
+    color: COLORS.muted,
+    fontSize: 13,
+    lineHeight: 20,
     textAlign: 'center',
-    maxWidth: 330,
-    marginTop: 6,
+    maxWidth: 350,
+    marginTop: 5,
   },
 
   card: {
     width: '100%',
-    maxWidth: 440,
-    alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 24,
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: '#E4E7EC',
-    shadowColor: '#172033',
+    borderColor: COLORS.border,
+    borderRadius: 21,
+    padding: 25,
+    shadowColor: COLORS.navy,
     shadowOffset: {
       width: 0,
-      height: 16,
+      height: 13,
     },
     shadowOpacity: 0.07,
-    shadowRadius: 30,
+    shadowRadius: 24,
     elevation: 5,
   },
 
-  headerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: '#EAF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+  orangeLine: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.orange,
+    marginBottom: 10,
   },
 
-  headerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#208AEF',
+  eyebrow: {
+    color: COLORS.orange,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.3,
   },
 
   title: {
-    fontSize: 27,
-    fontWeight: '800',
-    color: '#172033',
-    letterSpacing: -0.5,
+    color: COLORS.navy,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+    marginTop: 5,
   },
 
   subtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#667085',
-    marginTop: 6,
-    marginBottom: 24,
+    color: COLORS.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 7,
+    marginBottom: 21,
   },
 
   errorBox: {
-    backgroundColor: '#FEF3F2',
+    backgroundColor: COLORS.dangerSoft,
     borderWidth: 1,
-    borderColor: '#FDA29B',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 18,
+    borderColor: '#F2C8C8',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    marginBottom: 16,
+  },
+
+  errorIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  messageBody: {
+    flex: 1,
+    minWidth: 0,
   },
 
   errorTitle: {
-    color: '#B42318',
-    fontSize: 13,
-    fontWeight: '800',
-    marginBottom: 4,
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 3,
   },
 
   errorText: {
-    color: '#B42318',
-    fontSize: 13,
-    lineHeight: 19,
+    color: COLORS.danger,
+    fontSize: 11,
+    lineHeight: 17,
   },
 
   successBox: {
-    backgroundColor: '#ECFDF3',
+    backgroundColor: COLORS.successSoft,
     borderWidth: 1,
-    borderColor: '#6CE9A6',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 18,
+    borderColor: '#B7E3C8',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginBottom: 16,
+  },
+
+  successIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   successText: {
-    color: '#027A48',
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '700',
+    flex: 1,
+    color: COLORS.success,
+    fontSize: 11,
+    lineHeight: 17,
+    fontWeight: '800',
   },
 
   field: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
 
   label: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#475467',
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 8,
+    color: COLORS.navy,
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 7,
   },
 
   inputWrapper: {
-    height: 52,
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 11,
+    backgroundColor: '#FAFBFC',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E4E7EC',
-    borderRadius: 14,
   },
 
   inputWrapperActive: {
-    borderColor: '#A8D4FF',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.orange,
+    backgroundColor: COLORS.white,
   },
 
-  inputIcon: {
-    width: 42,
-    textAlign: 'center',
-    color: '#98A2B3',
-    fontSize: 17,
-    fontWeight: '800',
+  inputIconBox: {
+    width: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   input: {
     flex: 1,
-    height: '100%',
-    paddingHorizontal: 2,
-    paddingRight: 12,
-    fontSize: 15,
-    color: '#172033',
-  },
-
-  passwordInput: {
-    paddingRight: 4,
-  },
+    minWidth: 0,
+    minHeight: 50,
+    color: COLORS.text,
+    fontSize: 14,
+    paddingVertical: 10,
+    paddingRight: 8,
+    outlineStyle: 'none',
+  } as any,
 
   eyeButton: {
-    paddingHorizontal: 14,
-    height: '100%',
+    minWidth: 45,
+    minHeight: 50,
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  eyeText: {
-    color: '#208AEF',
-    fontSize: 12,
-    fontWeight: '800',
   },
 
   optionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
     marginTop: 2,
-    marginBottom: 22,
+    marginBottom: 21,
+  },
+
+  optionsRowSmall: {
+    flexWrap: 'wrap',
   },
 
   rememberRow: {
@@ -635,60 +783,59 @@ const styles = StyleSheet.create({
   },
 
   checkbox: {
-    width: 18,
-    height: 18,
+    width: 19,
+    height: 19,
     borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: '#D0D5DD',
+    borderColor: '#CBD2DA',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
   },
 
   checkboxChecked: {
-    backgroundColor: '#208AEF',
-    borderColor: '#208AEF',
-  },
-
-  checkmark: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
+    backgroundColor: COLORS.orange,
+    borderColor: COLORS.orange,
   },
 
   rememberText: {
-    color: '#667085',
-    fontSize: 12,
-    fontWeight: '600',
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '700',
   },
 
   forgotText: {
-    color: '#208AEF',
-    fontSize: 12,
-    fontWeight: '800',
+    color: COLORS.orangeDark,
+    fontSize: 11,
+    fontWeight: '900',
   },
 
   button: {
-    height: 54,
-    borderRadius: 15,
-    backgroundColor: '#208AEF',
+    minHeight: 52,
+    borderRadius: 10,
+    backgroundColor: COLORS.orange,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 9,
-    shadowColor: '#208AEF',
+    gap: 8,
+    paddingHorizontal: 16,
+    shadowColor: COLORS.orange,
     shadowOffset: {
       width: 0,
-      height: 8,
+      height: 7,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
+    shadowOpacity: 0.18,
+    shadowRadius: 13,
     elevation: 5,
   },
 
   buttonPressed: {
-    opacity: 0.88,
-    transform: [{ translateY: 1 }],
+    opacity: 0.86,
+    transform: [
+      {
+        translateY: 1,
+      },
+    ],
   },
 
   buttonDisabled: {
@@ -696,42 +843,36 @@ const styles = StyleSheet.create({
   },
 
   buttonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  arrow: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '600',
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '900',
   },
 
   registerSection: {
     borderTopWidth: 1,
-    borderTopColor: '#F2F4F7',
-    marginTop: 24,
-    paddingTop: 20,
+    borderTopColor: COLORS.border,
+    marginTop: 22,
+    paddingTop: 18,
     alignItems: 'center',
   },
 
   registerText: {
-    color: '#667085',
-    fontSize: 13,
+    color: COLORS.muted,
+    fontSize: 12,
   },
 
   registerLink: {
-    color: '#208AEF',
-    fontSize: 13,
-    fontWeight: '800',
-    marginTop: 7,
+    color: COLORS.orangeDark,
+    fontSize: 12,
+    fontWeight: '900',
+    marginTop: 6,
   },
 
   footer: {
     textAlign: 'center',
-    color: '#98A2B3',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 20,
+    color: COLORS.lightMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 18,
   },
 });

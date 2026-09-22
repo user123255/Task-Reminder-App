@@ -1,8 +1,6 @@
-import { Link, router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,72 +9,130 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
-import { signUp } from '@/services/auth';
+import { supabase } from '@/utils/supabase';
+
+const COLORS = {
+  navy: '#071A2F',
+  navy2: '#0B2239',
+  navy3: '#102E4A',
+
+  orange: '#FF7A00',
+  orangeDark: '#E76500',
+  orangeSoft: '#FFF1E5',
+
+  background: '#F5F6F8',
+  white: '#FFFFFF',
+
+  text: '#172033',
+  muted: '#667085',
+  lightMuted: '#98A2B3',
+
+  border: '#E2E6EB',
+
+  success: '#15803D',
+  successSoft: '#ECFDF3',
+
+  danger: '#C62828',
+  dangerSoft: '#FFF0F0',
+};
 
 export default function SignupScreen() {
-  const [fullName, setFullName] = useState('');
+  const { width } = useWindowDimensions();
+
+  const isSmallScreen = width < 420;
+
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [confirmPassword, setConfirmPassword] =
+    useState('');
 
-  const handleSignup = async () => {
-    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
-      Alert.alert(
-        'Missing information',
-        'Please complete all the fields.'
-      );
+  const [showPassword, setShowPassword] =
+    useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    setError('');
+
+    const cleanName = displayName.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanName) {
+      setError('Please enter your display name.');
+      return;
+    }
+
+    if (!cleanEmail) {
+      setError('Please enter your email address.');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert(
-        'Password too short',
-        'Your password must contain at least 6 characters.'
+      setError(
+        'Password must contain at least 6 characters.',
       );
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert(
-        'Passwords do not match',
-        'Please make sure both passwords are the same.'
-      );
+      setError('The passwords do not match.');
       return;
     }
 
     try {
       setLoading(true);
 
-      const data = await signUp(
-        email.trim(),
-        password,
-        fullName.trim()
-      );
-
-      if (!data.session) {
-        Alert.alert(
-          'Check your email',
-          'Your account has been created. Please verify your email before signing in.',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/login'),
+      const { data, error: signUpError } =
+        await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            data: {
+              full_name: cleanName,
+              name: cleanName,
             },
-          ]
-        );
-      } else {
-        router.replace('/');
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unable to create your account. Please try again.';
+          },
+        });
 
-      Alert.alert('Sign up failed', message);
+      if (signUpError) {
+        throw signUpError;
+      }
+
+      if (!data.user) {
+        throw new Error(
+          'The account could not be created.',
+        );
+      }
+
+      /*
+       * With Supabase Email Confirmations disabled,
+       * signUp returns a live session and the user can
+       * continue directly into the application.
+       */
+      if (!data.session) {
+        throw new Error(
+          'Email confirmation is still enabled in Supabase. Disable Confirm Email in Authentication settings, then create the account again.',
+        );
+      }
+
+      router.replace('/');
+    } catch (err) {
+      console.error('Signup failed:', err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to create your account. Please try again.',
+      );
     } finally {
       setLoading(false);
     }
@@ -84,96 +140,376 @@ export default function SignupScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.container}
+      behavior={
+        Platform.OS === 'ios'
+          ? 'padding'
+          : undefined
+      }
     >
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.content,
+          isSmallScreen &&
+            styles.contentSmall,
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>✓</Text>
-        </View>
+        <View
+          style={[
+            styles.page,
+            isSmallScreen && styles.pageSmall,
+          ]}
+        >
+          {/* BRAND */}
 
-        <Text style={styles.title}>Create your account</Text>
+          <View style={styles.hero}>
+            <View style={styles.logo}>
+              <Ionicons
+                name="checkmark"
+                size={29}
+                color={COLORS.white}
+              />
+            </View>
 
-        <Text style={styles.subtitle}>
-          Build better habits, stay organized, and make progress every day.
-        </Text>
+            <Text style={styles.brand}>
+              TaskFlow
+            </Text>
 
-        <View style={styles.form}>
-          <Text style={styles.label}>Full name</Text>
+            <Text style={styles.heroText}>
+              Create your personal workspace and
+              start organizing your day.
+            </Text>
+          </View>
 
-          <TextInput
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder="Your full name"
-            placeholderTextColor="#98A2B3"
-            autoCapitalize="words"
-            style={styles.input}
-          />
+          {/* SIGN UP CARD */}
 
-          <Text style={styles.label}>Email</Text>
+          <View style={styles.card}>
+            <View style={styles.orangeLine} />
 
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            placeholderTextColor="#98A2B3"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.input}
-          />
+            <Text style={styles.eyebrow}>
+              GET STARTED
+            </Text>
 
-          <Text style={styles.label}>Password</Text>
+            <Text style={styles.title}>
+              Create your account
+            </Text>
 
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="At least 6 characters"
-            placeholderTextColor="#98A2B3"
-            secureTextEntry
-            style={styles.input}
-          />
+            <Text style={styles.subtitle}>
+              Set up your personal TaskFlow workspace
+              in just a few steps.
+            </Text>
 
-          <Text style={styles.label}>Confirm password</Text>
+            {/* ERROR */}
 
-          <TextInput
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            placeholder="Repeat your password"
-            placeholderTextColor="#98A2B3"
-            secureTextEntry
-            style={styles.input}
-          />
+            {error ? (
+              <View style={styles.errorBox}>
+                <View style={styles.errorIcon}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={19}
+                    color={COLORS.danger}
+                  />
+                </View>
 
-          <Pressable
-            onPress={handleSignup}
-            disabled={loading}
-            style={({ pressed }) => [
-              styles.button,
-              pressed && styles.buttonPressed,
-              loading && styles.buttonDisabled,
-            ]}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Create account</Text>
-            )}
-          </Pressable>
-        </View>
+                <View style={styles.errorBody}>
+                  <Text style={styles.errorTitle}>
+                    Account creation failed
+                  </Text>
 
-        <View style={styles.loginRow}>
-          <Text style={styles.loginText}>Already have an account? </Text>
+                  <Text style={styles.errorText}>
+                    {error}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
 
-          <Link href="/login" asChild>
-            <Pressable>
-              <Text style={styles.loginLink}>Sign in</Text>
+            {/* DISPLAY NAME */}
+
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Full name
+              </Text>
+
+              <View
+                style={[
+                  styles.inputWrapper,
+                  displayName.length > 0 &&
+                    styles.inputWrapperActive,
+                ]}
+              >
+                <View style={styles.inputIcon}>
+                  <Ionicons
+                    name="person-outline"
+                    size={18}
+                    color={
+                      displayName.length > 0
+                        ? COLORS.orange
+                        : COLORS.lightMuted
+                    }
+                  />
+                </View>
+
+                <TextInput
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  placeholder="Your full name"
+                  placeholderTextColor={
+                    COLORS.lightMuted
+                  }
+                  style={styles.input}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  editable={!loading}
+                />
+              </View>
+            </View>
+
+            {/* EMAIL */}
+
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Email address
+              </Text>
+
+              <View
+                style={[
+                  styles.inputWrapper,
+                  email.length > 0 &&
+                    styles.inputWrapperActive,
+                ]}
+              >
+                <View style={styles.inputIcon}>
+                  <Ionicons
+                    name="mail-outline"
+                    size={18}
+                    color={
+                      email.length > 0
+                        ? COLORS.orange
+                        : COLORS.lightMuted
+                    }
+                  />
+                </View>
+
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor={
+                    COLORS.lightMuted
+                  }
+                  style={styles.input}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  editable={!loading}
+                />
+              </View>
+            </View>
+
+            {/* PASSWORD */}
+
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Password
+              </Text>
+
+              <View
+                style={[
+                  styles.inputWrapper,
+                  password.length > 0 &&
+                    styles.inputWrapperActive,
+                ]}
+              >
+                <View style={styles.inputIcon}>
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={18}
+                    color={
+                      password.length > 0
+                        ? COLORS.orange
+                        : COLORS.lightMuted
+                    }
+                  />
+                </View>
+
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="At least 6 characters"
+                  placeholderTextColor={
+                    COLORS.lightMuted
+                  }
+                  style={styles.input}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="new-password"
+                  editable={!loading}
+                />
+
+                <Pressable
+                  onPress={() =>
+                    setShowPassword(
+                      value => !value,
+                    )
+                  }
+                  disabled={loading}
+                  style={styles.eyeButton}
+                >
+                  <Ionicons
+                    name={
+                      showPassword
+                        ? 'eye-off-outline'
+                        : 'eye-outline'
+                    }
+                    size={19}
+                    color={COLORS.muted}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* CONFIRM PASSWORD */}
+
+            <View style={styles.field}>
+              <Text style={styles.label}>
+                Confirm password
+              </Text>
+
+              <View
+                style={[
+                  styles.inputWrapper,
+                  confirmPassword.length > 0 &&
+                    styles.inputWrapperActive,
+                ]}
+              >
+                <View style={styles.inputIcon}>
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={18}
+                    color={
+                      confirmPassword.length > 0
+                        ? COLORS.orange
+                        : COLORS.lightMuted
+                    }
+                  />
+                </View>
+
+                <TextInput
+                  value={confirmPassword}
+                  onChangeText={
+                    setConfirmPassword
+                  }
+                  placeholder="Repeat your password"
+                  placeholderTextColor={
+                    COLORS.lightMuted
+                  }
+                  style={styles.input}
+                  secureTextEntry={
+                    !showConfirmPassword
+                  }
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="new-password"
+                  editable={!loading}
+                />
+
+                <Pressable
+                  onPress={() =>
+                    setShowConfirmPassword(
+                      value => !value,
+                    )
+                  }
+                  disabled={loading}
+                  style={styles.eyeButton}
+                >
+                  <Ionicons
+                    name={
+                      showConfirmPassword
+                        ? 'eye-off-outline'
+                        : 'eye-outline'
+                    }
+                    size={19}
+                    color={COLORS.muted}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* CREATE ACCOUNT */}
+
+            <Pressable
+              disabled={loading}
+              onPress={() => void submit()}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                loading &&
+                  styles.disabled,
+                pressed &&
+                  !loading &&
+                  styles.pressed,
+              ]}
+            >
+              {loading ? (
+                <>
+                  <ActivityIndicator
+                    color={COLORS.white}
+                    size="small"
+                  />
+
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
+                    Creating account...
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
+                    Create account
+                  </Text>
+
+                  <Ionicons
+                    name="arrow-forward"
+                    size={18}
+                    color={COLORS.white}
+                  />
+                </>
+              )}
             </Pressable>
-          </Link>
+
+            {/* LOGIN */}
+
+            <View style={styles.loginRow}>
+              <Text style={styles.loginText}>
+                Already have an account?
+              </Text>
+
+              <Pressable
+                onPress={() =>
+                  router.replace('/login')
+                }
+                disabled={loading}
+              >
+                <Text style={styles.loginLink}>
+                  Log in →
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <Text style={styles.footer}>
+            TaskFlow © 2026
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -181,110 +517,277 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  container: {
     flex: 1,
-    backgroundColor: '#F6F8FC',
+    backgroundColor: COLORS.background,
   },
 
-  container: {
+  content: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 34,
   },
 
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: '#208AEF',
-    alignItems: 'center',
-    justifyContent: 'center',
+  contentSmall: {
+    paddingHorizontal: 14,
+    paddingVertical: 22,
+  },
+
+  page: {
+    width: '100%',
+    maxWidth: 540,
     alignSelf: 'center',
+  },
+
+  pageSmall: {
+    maxWidth: 520,
+  },
+
+  hero: {
+    alignItems: 'center',
     marginBottom: 24,
   },
 
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 30,
-    fontWeight: '800',
+  logo: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: COLORS.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 11,
+    shadowColor: COLORS.navy,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 15,
+    elevation: 6,
+  },
+
+  brand: {
+    color: COLORS.navy,
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+
+  heroText: {
+    color: COLORS.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    maxWidth: 350,
+    marginTop: 5,
+  },
+
+  card: {
+    width: '100%',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 21,
+    padding: 25,
+    shadowColor: COLORS.navy,
+    shadowOffset: {
+      width: 0,
+      height: 13,
+    },
+    shadowOpacity: 0.07,
+    shadowRadius: 24,
+    elevation: 5,
+  },
+
+  orangeLine: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.orange,
+    marginBottom: 10,
+  },
+
+  eyebrow: {
+    color: COLORS.orange,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.3,
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#172033',
-    textAlign: 'center',
+    color: COLORS.navy,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+    marginTop: 5,
   },
 
   subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#667085',
-    textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 28,
+    color: COLORS.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 7,
+    marginBottom: 18,
   },
 
-  form: {
-    width: '100%',
+  errorBox: {
+    backgroundColor: COLORS.dangerSoft,
+    borderWidth: 1,
+    borderColor: '#F2C8C8',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    marginBottom: 14,
+  },
+
+  errorIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  errorBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  errorTitle: {
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 3,
+  },
+
+  errorText: {
+    color: COLORS.danger,
+    fontSize: 11,
+    lineHeight: 17,
+  },
+
+  field: {
+    marginBottom: 14,
   },
 
   label: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#172033',
-    marginBottom: 8,
-    marginTop: 14,
+    color: COLORS.navy,
+    fontSize: 11,
+    fontWeight: '900',
+    marginBottom: 7,
+  },
+
+  inputWrapper: {
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 11,
+    backgroundColor: '#FAFBFC',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  inputWrapperActive: {
+    borderColor: COLORS.orange,
+    backgroundColor: COLORS.white,
+  },
+
+  inputIcon: {
+    width: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   input: {
-    height: 54,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E4E7EC',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#172033',
-  },
+    flex: 1,
+    minWidth: 0,
+    minHeight: 50,
+    color: COLORS.text,
+    fontSize: 14,
+    paddingVertical: 10,
+    paddingRight: 7,
+    outlineStyle: 'none',
+  } as any,
 
-  button: {
-    height: 56,
-    backgroundColor: '#208AEF',
-    borderRadius: 16,
+  eyeButton: {
+    minWidth: 45,
+    minHeight: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 28,
   },
 
-  buttonPressed: {
-    opacity: 0.85,
+  primaryButton: {
+    minHeight: 52,
+    borderRadius: 10,
+    backgroundColor: COLORS.orange,
+    marginTop: 8,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: COLORS.orange,
+    shadowOffset: {
+      width: 0,
+      height: 7,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 13,
+    elevation: 5,
   },
 
-  buttonDisabled: {
+  primaryButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  disabled: {
     opacity: 0.65,
   },
 
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+  pressed: {
+    opacity: 0.84,
+    transform: [
+      {
+        translateY: 1,
+      },
+    ],
   },
 
   loginRow: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    marginTop: 21,
+    paddingTop: 18,
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 26,
+    gap: 5,
   },
 
   loginText: {
-    color: '#667085',
-    fontSize: 14,
+    color: COLORS.muted,
+    fontSize: 12,
   },
 
   loginLink: {
-    color: '#208AEF',
-    fontSize: 14,
+    color: COLORS.orangeDark,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  footer: {
+    textAlign: 'center',
+    color: COLORS.lightMuted,
+    fontSize: 10,
     fontWeight: '700',
+    marginTop: 18,
   },
 });
