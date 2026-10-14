@@ -19,10 +19,10 @@ const COLORS = {
   background: '#F6F8FC',
   card: '#FFFFFF',
   text: '#172033',
-  muted: '#718096',
+  muted: '#667085',
   border: '#E7ECF3',
   blueSoft: '#EAF4FF',
-  graySoft: '#F5F7FA',
+  graySoft: '#F6F8FC',
   white: '#FFFFFF',
   navy: '#172033',
 };

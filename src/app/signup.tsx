@@ -17,28 +17,28 @@ import { router } from 'expo-router';
 import { supabase } from '@/utils/supabase';
 
 const COLORS = {
-  navy: '#071A2F',
-  navy2: '#0B2239',
-  navy3: '#102E4A',
+  navy: '#172033',
+  navy2: '#24324A',
+  navy3: '#34435C',
 
-  orange: '#FF7A00',
-  orangeDark: '#E76500',
-  orangeSoft: '#FFF1E5',
+  primary: '#208AEF',
+  primaryDark: '#176FC1',
+  primarySoft: '#EAF4FF',
 
-  background: '#F5F6F8',
+  background: '#F6F8FC',
   white: '#FFFFFF',
 
   text: '#172033',
   muted: '#667085',
   lightMuted: '#98A2B3',
 
-  border: '#E2E6EB',
+  border: '#E7ECF3',
 
-  success: '#15803D',
-  successSoft: '#ECFDF3',
+  success: '#20A464',
+  successSoft: '#E8F7EF',
 
-  danger: '#C62828',
-  dangerSoft: '#FFF0F0',
+  danger: '#DC2626',
+  dangerSoft: '#FEECEC',
 };
 
 export default function SignupScreen() {
@@ -186,7 +186,7 @@ export default function SignupScreen() {
           {/* SIGN UP CARD */}
 
           <View style={styles.card}>
-            <View style={styles.orangeLine} />
+            <View style={styles.accentLine} />
 
             <Text style={styles.eyebrow}>
               GET STARTED
@@ -245,7 +245,7 @@ export default function SignupScreen() {
                     size={18}
                     color={
                       displayName.length > 0
-                        ? COLORS.orange
+                        ? COLORS.primary
                         : COLORS.lightMuted
                     }
                   />
@@ -286,7 +286,7 @@ export default function SignupScreen() {
                     size={18}
                     color={
                       email.length > 0
-                        ? COLORS.orange
+                        ? COLORS.primary
                         : COLORS.lightMuted
                     }
                   />
@@ -329,7 +329,7 @@ export default function SignupScreen() {
                     size={18}
                     color={
                       password.length > 0
-                        ? COLORS.orange
+                        ? COLORS.primary
                         : COLORS.lightMuted
                     }
                   />
@@ -392,7 +392,7 @@ export default function SignupScreen() {
                     size={18}
                     color={
                       confirmPassword.length > 0
-                        ? COLORS.orange
+                        ? COLORS.primary
                         : COLORS.lightMuted
                     }
                   />
@@ -600,16 +600,16 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 
-  orangeLine: {
+  accentLine: {
     width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.orange,
+    backgroundColor: COLORS.primary,
     marginBottom: 10,
   },
 
   eyebrow: {
-    color: COLORS.orange,
+    color: COLORS.primary,
     fontSize: 9,
     fontWeight: '900',
     letterSpacing: 1.3,
@@ -693,7 +693,7 @@ const styles = StyleSheet.create({
   },
 
   inputWrapperActive: {
-    borderColor: COLORS.orange,
+    borderColor: COLORS.primary,
     backgroundColor: COLORS.white,
   },
 
@@ -724,14 +724,14 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 52,
     borderRadius: 10,
-    backgroundColor: COLORS.orange,
+    backgroundColor: COLORS.primary,
     marginTop: 8,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: COLORS.orange,
+    shadowColor: COLORS.primary,
     shadowOffset: {
       width: 0,
       height: 7,
@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
   },
 
   loginLink: {
-    color: COLORS.orangeDark,
+    color: COLORS.primaryDark,
     fontSize: 12,
     fontWeight: '900',
   },

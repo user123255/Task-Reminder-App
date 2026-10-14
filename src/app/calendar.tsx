@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -24,26 +23,26 @@ import {
 /* -------------------------------------------------------------------------- */
 
 const COLORS = {
-  navy: "#0B1F3A",
-  navyDark: "#07162A",
-  navySoft: "#163354",
+  navy: "#172033",
+  navyDark: "#101828",
+  navySoft: "#263653",
 
-  orange: "#FF7A00",
-  orangeDark: "#E96500",
-  orangeSoft: "#FFF1E5",
+  orange: "#208AEF",
+  orangeDark: "#1976D2",
+  orangeSoft: "#EAF4FF",
 
-  gold: "#DFAE45",
-  goldSoft: "#FBF5E7",
+  gold: "#8B7DED",
+  goldSoft: "#F0EDFF",
 
-  background: "#F4F5F7",
+  background: "#F6F8FC",
   white: "#FFFFFF",
 
-  text: "#10213A",
+  text: "#172033",
   muted: "#64748B",
   lightMuted: "#94A3B8",
 
-  border: "#E2E6EB",
-  borderStrong: "#D4DAE2",
+  border: "#E7ECF3",
+  borderStrong: "#D5DDE8",
 
   success: "#198754",
   successSoft: "#EAF6EF",
@@ -54,19 +53,6 @@ const COLORS = {
   warning: "#B7791F",
   warningSoft: "#FFF7E5",
 };
-
-const NAV_ITEMS = [
-  { label: "Home", icon: "home-outline", route: "/" },
-  { label: "Tasks", icon: "checkmark-square-outline", route: "/tasks" },
-  { label: "Calendar", icon: "calendar-outline", route: "/calendar" },
-  { label: "Library", icon: "library-outline", route: "/library" },
-  { label: "Reports", icon: "bar-chart-outline", route: "/reports" },
-  { label: "AI Assist", icon: "sparkles-outline", route: "/ai-assist" },
-  { label: "Meetings", icon: "people-outline", route: "/meetings" },
-  { label: "Trash", icon: "trash-outline", route: "/trash" },
-  { label: "Help", icon: "help-circle-outline", route: "/help" },
-  { label: "Settings", icon: "settings-outline", route: "/settings" },
-];
 
 /* -------------------------------------------------------------------------- */
 /*                                  HELPERS                                   */
@@ -223,10 +209,7 @@ export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const loadActivities = useCallback(
+const loadActivities = useCallback(
     async (showRefresh = false) => {
       try {
         if (showRefresh) {
@@ -344,84 +327,6 @@ export default function CalendarScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* ------------------------------------------------------------------ */}
-      {/* DESKTOP TOP NAVIGATION                                             */}
-      {/* ------------------------------------------------------------------ */}
-
-      {isDesktop && (
-        <View style={styles.desktopTopBar}>
-          <Pressable
-            style={styles.brand}
-            onPress={() => navigate("/")}
-          >
-            <View style={styles.brandMark}>
-              <Ionicons
-                name="checkmark"
-                size={19}
-                color={COLORS.white}
-              />
-            </View>
-
-            <Text style={styles.brandText}>TaskFlow</Text>
-          </Pressable>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.desktopNavScroll}
-            contentContainerStyle={styles.desktopNav}
-          >
-            {NAV_ITEMS.slice(0, 7).map((item) => {
-              const active = item.route === "/calendar";
-
-              return (
-                <Pressable
-                  key={item.route}
-                  style={[
-                    styles.desktopNavItem,
-                    active && styles.desktopNavItemActive,
-                  ]}
-                  onPress={() => navigate(item.route)}
-                >
-                  <Text
-                    style={[
-                      styles.desktopNavText,
-                      active && styles.desktopNavTextActive,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          <View style={styles.topRightActions}>
-            <Pressable
-              style={styles.topIconButton}
-              onPress={() => navigate("/help")}
-              accessibilityRole="button"
-              accessibilityLabel="Help"
-            >
-              <Ionicons
-                name="help-circle-outline"
-                size={21}
-                color={COLORS.white}
-              />
-            </Pressable>
-
-            <Pressable
-              style={styles.profileButton}
-              onPress={() => navigate("/settings")}
-              accessibilityRole="button"
-              accessibilityLabel="Settings and profile"
-            >
-              <Text style={styles.profileLetter}>N</Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-
       <View style={styles.mainArea}>
         {/* -------------------------------------------------------------- */}
         {/* MOBILE HEADER                                                   */}
@@ -434,20 +339,7 @@ export default function CalendarScreen() {
               isSmallPhone && styles.mobileHeaderSmall,
             ]}
           >
-            <Pressable
-              style={styles.mobileMenuButton}
-              onPress={() => setDrawerOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Open navigation menu"
-            >
-              <Ionicons
-                name="menu-outline"
-                size={27}
-                color={COLORS.white}
-              />
-            </Pressable>
-
-            <Pressable
+<Pressable
               style={styles.mobileBrand}
               onPress={() => navigate("/")}
             >
@@ -1233,117 +1125,7 @@ export default function CalendarScreen() {
         </ScrollView>
       </View>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* MOBILE DRAWER                                                      */}
-      {/* ------------------------------------------------------------------ */}
 
-      <Modal
-        visible={drawerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDrawerOpen(false)}
-      >
-        <View style={styles.drawerOverlay}>
-          <Pressable
-            style={styles.drawerBackdrop}
-            onPress={() => setDrawerOpen(false)}
-          />
-
-          <View style={styles.drawer}>
-            <View style={styles.drawerHeader}>
-              <Pressable
-                style={styles.drawerBrand}
-                onPress={() => {
-                  setDrawerOpen(false);
-                  navigate("/");
-                }}
-              >
-                <View style={styles.drawerBrandMark}>
-                  <Ionicons
-                    name="checkmark"
-                    size={18}
-                    color={COLORS.white}
-                  />
-                </View>
-
-                <Text style={styles.drawerBrandText}>
-                  TaskFlow
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.drawerClose}
-                onPress={() => setDrawerOpen(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Close navigation menu"
-              >
-                <Ionicons
-                  name="close"
-                  size={24}
-                  color={COLORS.white}
-                />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              contentContainerStyle={styles.drawerContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={styles.drawerLabel}>
-                WORKSPACE
-              </Text>
-
-              {NAV_ITEMS.map((item) => {
-                const active = item.route === "/calendar";
-
-                return (
-                  <Pressable
-                    key={item.route}
-                    style={[
-                      styles.drawerItem,
-                      active && styles.drawerItemActive,
-                    ]}
-                    onPress={() => {
-                      setDrawerOpen(false);
-                      navigate(item.route);
-                    }}
-                  >
-                    <Ionicons
-                      name={item.icon as any}
-                      size={20}
-                      color={
-                        active
-                          ? COLORS.orange
-                          : COLORS.white
-                      }
-                    />
-
-                    <Text
-                      style={[
-                        styles.drawerItemText,
-                        active &&
-                          styles.drawerItemTextActive,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            <View style={styles.drawerFooter}>
-              <Text style={styles.drawerFooterText}>
-                TaskFlow
-              </Text>
-
-              <Text style={styles.drawerVersion}>
-                Version 1.0.0
-              </Text>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -1356,112 +1138,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-
-  /* Desktop navigation */
-
-  desktopTopBar: {
-    height: 72,
-    backgroundColor: COLORS.navy,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 30,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
-  },
-
-  brand: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: 165,
-    flexShrink: 0,
-  },
-
-  brandMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 7,
-    backgroundColor: COLORS.orange,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-
-  brandText: {
-    color: COLORS.white,
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-  },
-
-  desktopNavScroll: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  desktopNav: {
-    flexGrow: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-
-  desktopNavItem: {
-    paddingHorizontal: 11,
-    minWidth: 65,
-    height: 72,
-    justifyContent: "center",
-    alignItems: "center",
-    borderBottomWidth: 3,
-    borderBottomColor: "transparent",
-  },
-
-  desktopNavItemActive: {
-    borderBottomColor: COLORS.orange,
-  },
-
-  desktopNavText: {
-    color: "#B8C4D3",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  desktopNavTextActive: {
-    color: COLORS.white,
-  },
-
-  topRightActions: {
-    width: 105,
-    flexShrink: 0,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  topIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 7,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-
-  profileButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: COLORS.gold,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  profileLetter: {
-    color: COLORS.navy,
-    fontWeight: "800",
-    fontSize: 14,
   },
 
   mainArea: {
@@ -1495,16 +1171,7 @@ const styles = StyleSheet.create({
   mobileHeaderSmall: {
     paddingHorizontal: 10,
   },
-
-  mobileMenuButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-
-  mobileBrand: {
+mobileBrand: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1672,7 +1339,7 @@ const styles = StyleSheet.create({
     height: 170,
     borderRadius: 85,
     borderWidth: 1,
-    borderColor: "rgba(255,122,0,0.13)",
+    borderColor: "rgba(32,138,239,0.13)",
     right: -45,
     bottom: -80,
   },
@@ -2346,7 +2013,7 @@ const styles = StyleSheet.create({
   tipCard: {
     backgroundColor: COLORS.goldSoft,
     borderWidth: 1,
-    borderColor: "#EFE0B9",
+    borderColor: "#DCD6FF",
     borderRadius: 7,
     padding: 14,
     flexDirection: "row",
@@ -2421,129 +2088,4 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
   },
 
-  /* Drawer */
-
-  drawerOverlay: {
-    flex: 1,
-    flexDirection: "row",
-  },
-
-  drawerBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-
-  drawer: {
-    width: 290,
-    maxWidth: "82%",
-    backgroundColor: COLORS.navy,
-    height: "100%",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 3,
-      height: 0,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-
-  drawerHeader: {
-    height: 72,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
-  },
-
-  drawerBrand: {
-    flexDirection: "row",
-    alignItems: "center",
-    minWidth: 0,
-  },
-
-  drawerBrandMark: {
-    width: 31,
-    height: 31,
-    borderRadius: 6,
-    backgroundColor: COLORS.orange,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 9,
-  },
-
-  drawerBrandText: {
-    color: COLORS.white,
-    fontSize: 19,
-    fontWeight: "800",
-  },
-
-  drawerClose: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-
-  drawerContent: {
-    padding: 18,
-    paddingBottom: 25,
-  },
-
-  drawerLabel: {
-    color: COLORS.gold,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1.6,
-    marginBottom: 10,
-    marginLeft: 9,
-  },
-
-  drawerItem: {
-    minHeight: 47,
-    borderRadius: 6,
-    paddingHorizontal: 11,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 3,
-    gap: 12,
-  },
-
-  drawerItemActive: {
-    backgroundColor: "rgba(255,122,0,0.13)",
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.orange,
-  },
-
-  drawerItemText: {
-    color: "#C1CDDA",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  drawerItemTextActive: {
-    color: COLORS.white,
-    fontWeight: "800",
-  },
-
-  drawerFooter: {
-    padding: 18,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.08)",
-  },
-
-  drawerFooterText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "800",
-    marginBottom: 3,
-  },
-
-  drawerVersion: {
-    color: "#7E8FA3",
-    fontSize: 10,
-  },
 });

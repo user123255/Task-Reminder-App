@@ -26,7 +26,7 @@ const AREA_COLORS: Record<string, string> = {
   Spiritual: '#8B5CF6',
   Health: '#10B981',
   Business: '#F59E0B',
-  Career: '#3B82F6',
+  Career: '#208AEF',
   Relationships: '#EC4899',
   Learning: '#6366F1',
   Personal: '#14B8A6',

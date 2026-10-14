@@ -1,3 +1,4 @@
+
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -17,38 +18,39 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/utils/supabase';
 
 const COLORS = {
-  navy: '#071A2F',
-  navy2: '#0B2239',
-  navy3: '#102E4A',
+  navy: '#172033',
+  navy2: '#24324A',
+  navy3: '#34435C',
 
-  orange: '#FF7A00',
-  orangeDark: '#E76500',
-  orangeSoft: '#FFF1E5',
+  lavender: '#208AEF',
+  lavenderDark: '#176FC1',
+  lavenderPressed: '#176FC1',
+  lavenderSoft: '#EAF4FF',
 
-  background: '#F5F6F8',
+  background: '#F6F8FC',
+  backgroundInput: '#FFFFFF',
   white: '#FFFFFF',
 
   text: '#172033',
   muted: '#667085',
   lightMuted: '#98A2B3',
 
-  border: '#E2E6EB',
+  border: '#E7ECF3',
+  borderLight: '#E7ECF3',
 
-  success: '#15803D',
-  successSoft: '#ECFDF3',
+  success: '#20A464',
+  successSoft: '#E8F7EF',
 
-  danger: '#C62828',
-  dangerSoft: '#FFF0F0',
+  danger: '#DC2626',
+  dangerSoft: '#FEECEC',
 };
 
 export default function LoginScreen() {
   const { width } = useWindowDimensions();
-
   const isSmallScreen = width < 420;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -75,10 +77,6 @@ export default function LoginScreen() {
     try {
       setLoading(true);
 
-      console.log('==============================');
-      console.log('LOGIN STARTED');
-      console.log('Email:', cleanEmail);
-
       const { data, error } =
         await supabase.auth.signInWithPassword({
           email: cleanEmail,
@@ -101,10 +99,6 @@ export default function LoginScreen() {
         );
       }
 
-      console.log('LOGIN AUTHENTICATED');
-      console.log('User ID:', data.user.id);
-      console.log('Email:', data.user.email);
-
       const {
         data: sessionData,
         error: sessionError,
@@ -119,9 +113,6 @@ export default function LoginScreen() {
           'Login succeeded, but your session could not be stored. Please try again.',
         );
       }
-
-      console.log('SESSION VERIFIED');
-      console.log('Session user:', sessionData.session.user.id);
 
       if (Platform.OS === 'web') {
         try {
@@ -143,9 +134,6 @@ export default function LoginScreen() {
         }
       }
 
-      console.log('LOGIN SUCCESS');
-      console.log('==============================');
-
       setSuccessMessage(
         'Welcome back! Opening your dashboard...',
       );
@@ -164,26 +152,20 @@ export default function LoginScreen() {
         error !== null &&
         'message' in error
       ) {
-        const errorMessage = String(
+        const detail = String(
           (error as { message: unknown }).message,
         );
 
-        if (
-          errorMessage
-            .toLowerCase()
-            .includes('invalid login credentials')
-        ) {
+        const lowerDetail = detail.toLowerCase();
+
+        if (lowerDetail.includes('invalid login credentials')) {
           message =
             'The email or password is incorrect. Please check your details or reset your password.';
-        } else if (
-          errorMessage
-            .toLowerCase()
-            .includes('email not confirmed')
-        ) {
+        } else if (lowerDetail.includes('email not confirmed')) {
           message =
             'Please confirm your email address before signing in.';
         } else {
-          message = errorMessage;
+          message = detail;
         }
       }
 
@@ -196,17 +178,12 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={
-        Platform.OS === 'ios'
-          ? 'padding'
-          : undefined
-      }
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          isSmallScreen &&
-            styles.scrollContentSmall,
+          isSmallScreen && styles.scrollContentSmall,
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -217,53 +194,46 @@ export default function LoginScreen() {
             isSmallScreen && styles.pageSmall,
           ]}
         >
-          {/* BRAND HERO */}
+          {/* BRAND */}
 
           <View style={styles.hero}>
             <View style={styles.logo}>
               <Ionicons
                 name="checkmark"
-                size={29}
+                size={30}
                 color={COLORS.white}
               />
             </View>
 
-            <Text style={styles.brandName}>
-              TaskFlow
-            </Text>
+            <Text style={styles.brandName}>TaskFlow</Text>
 
             <Text style={styles.heroText}>
-              Stay focused, organized, and intentional
-              with your day.
+              Stay focused, organized, and intentional with your day.
             </Text>
           </View>
 
           {/* LOGIN CARD */}
 
           <View style={styles.card}>
-            <View style={styles.orangeLine} />
+            <View style={styles.accentLine} />
 
-            <Text style={styles.eyebrow}>
-              WELCOME BACK
-            </Text>
+            <Text style={styles.eyebrow}>WELCOME BACK</Text>
 
-            <Text style={styles.title}>
-              Sign in to TaskFlow
-            </Text>
+            <Text style={styles.title}>Sign in to TaskFlow</Text>
 
             <Text style={styles.subtitle}>
-              Continue managing your tasks, schedule,
-              and productivity in one place.
+              Continue managing your tasks, schedule, and productivity
+              in one place.
             </Text>
 
-            {/* ERROR */}
+            {/* ERROR MESSAGE */}
 
             {errorMessage ? (
               <View style={styles.errorBox}>
-                <View style={styles.errorIcon}>
+                <View style={styles.messageIcon}>
                   <Ionicons
                     name="alert-circle-outline"
-                    size={19}
+                    size={20}
                     color={COLORS.danger}
                   />
                 </View>
@@ -272,7 +242,6 @@ export default function LoginScreen() {
                   <Text style={styles.errorTitle}>
                     Sign in failed
                   </Text>
-
                   <Text style={styles.errorText}>
                     {errorMessage}
                   </Text>
@@ -280,14 +249,14 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {/* SUCCESS */}
+            {/* SUCCESS MESSAGE */}
 
             {successMessage ? (
               <View style={styles.successBox}>
-                <View style={styles.successIcon}>
+                <View style={styles.messageIcon}>
                   <Ionicons
                     name="checkmark-circle-outline"
-                    size={19}
+                    size={20}
                     color={COLORS.success}
                   />
                 </View>
@@ -301,24 +270,21 @@ export default function LoginScreen() {
             {/* EMAIL */}
 
             <View style={styles.field}>
-              <Text style={styles.label}>
-                Email address
-              </Text>
+              <Text style={styles.label}>Email address</Text>
 
               <View
                 style={[
                   styles.inputWrapper,
-                  email.length > 0 &&
-                    styles.inputWrapperActive,
+                  email.length > 0 && styles.inputWrapperActive,
                 ]}
               >
                 <View style={styles.inputIconBox}>
                   <Ionicons
                     name="mail-outline"
-                    size={18}
+                    size={19}
                     color={
                       email.length > 0
-                        ? COLORS.orange
+                        ? COLORS.lavender
                         : COLORS.lightMuted
                     }
                   />
@@ -328,14 +294,13 @@ export default function LoginScreen() {
                   value={email}
                   onChangeText={setEmail}
                   placeholder="you@example.com"
-                  placeholderTextColor={
-                    COLORS.lightMuted
-                  }
+                  placeholderTextColor={COLORS.lightMuted}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="email"
                   editable={!loading}
+                  returnKeyType="next"
                   style={styles.input}
                 />
               </View>
@@ -344,24 +309,21 @@ export default function LoginScreen() {
             {/* PASSWORD */}
 
             <View style={styles.field}>
-              <Text style={styles.label}>
-                Password
-              </Text>
+              <Text style={styles.label}>Password</Text>
 
               <View
                 style={[
                   styles.inputWrapper,
-                  password.length > 0 &&
-                    styles.inputWrapperActive,
+                  password.length > 0 && styles.inputWrapperActive,
                 ]}
               >
                 <View style={styles.inputIconBox}>
                   <Ionicons
                     name="lock-closed-outline"
-                    size={18}
+                    size={19}
                     color={
                       password.length > 0
-                        ? COLORS.orange
+                        ? COLORS.lavender
                         : COLORS.lightMuted
                     }
                   />
@@ -371,30 +333,26 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={setPassword}
                   placeholder="Enter your password"
-                  placeholderTextColor={
-                    COLORS.lightMuted
-                  }
+                  placeholderTextColor={COLORS.lightMuted}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="current-password"
                   editable={!loading}
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
                   style={styles.input}
                 />
 
                 <Pressable
                   onPress={() =>
-                    setShowPassword(
-                      current => !current,
-                    )
+                    setShowPassword(current => !current)
                   }
                   disabled={loading}
                   style={styles.eyeButton}
                   accessibilityRole="button"
                   accessibilityLabel={
-                    showPassword
-                      ? 'Hide password'
-                      : 'Show password'
+                    showPassword ? 'Hide password' : 'Show password'
                   }
                 >
                   <Ionicons
@@ -403,7 +361,7 @@ export default function LoginScreen() {
                         ? 'eye-off-outline'
                         : 'eye-outline'
                     }
-                    size={19}
+                    size={20}
                     color={COLORS.muted}
                   />
                 </Pressable>
@@ -415,33 +373,31 @@ export default function LoginScreen() {
             <View
               style={[
                 styles.optionsRow,
-                isSmallScreen &&
-                  styles.optionsRowSmall,
+                isSmallScreen && styles.optionsRowSmall,
               ]}
             >
               <Pressable
                 onPress={() =>
-                  setRememberMe(
-                    current => !current,
-                  )
+                  setRememberMe(current => !current)
                 }
                 disabled={loading}
                 style={styles.rememberRow}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: rememberMe }}
               >
                 <View
                   style={[
                     styles.checkbox,
-                    rememberMe &&
-                      styles.checkboxChecked,
+                    rememberMe && styles.checkboxChecked,
                   ]}
                 >
-                  {rememberMe && (
+                  {rememberMe ? (
                     <Ionicons
                       name="checkmark"
-                      size={12}
+                      size={13}
                       color={COLORS.white}
                     />
-                  )}
+                  ) : null}
                 </View>
 
                 <Text style={styles.rememberText}>
@@ -449,10 +405,7 @@ export default function LoginScreen() {
                 </Text>
               </Pressable>
 
-              <Link
-                href="/forgot-password"
-                asChild
-              >
+              <Link href="/forgot-password" asChild>
                 <Pressable disabled={loading}>
                   <Text style={styles.forgotText}>
                     Forgot password?
@@ -461,18 +414,16 @@ export default function LoginScreen() {
               </Link>
             </View>
 
-            {/* SIGN IN */}
+            {/* SIGN IN BUTTON */}
 
             <Pressable
               onPress={handleLogin}
               disabled={loading}
+              accessibilityRole="button"
               style={({ pressed }) => [
                 styles.button,
-                pressed &&
-                  !loading &&
-                  styles.buttonPressed,
-                loading &&
-                  styles.buttonDisabled,
+                pressed && !loading && styles.buttonPressed,
+                loading && styles.buttonDisabled,
               ]}
             >
               {loading ? (
@@ -481,37 +432,30 @@ export default function LoginScreen() {
                     color={COLORS.white}
                     size="small"
                   />
-
                   <Text style={styles.buttonText}>
                     Signing in...
                   </Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.buttonText}>
-                    Sign in
-                  </Text>
-
+                  <Text style={styles.buttonText}>Sign in</Text>
                   <Ionicons
                     name="arrow-forward"
-                    size={18}
+                    size={19}
                     color={COLORS.white}
                   />
                 </>
               )}
             </Pressable>
 
-            {/* REGISTER */}
+            {/* REGISTER LINK */}
 
             <View style={styles.registerSection}>
               <Text style={styles.registerText}>
                 Don't have an account?
               </Text>
 
-              <Link
-                href="/signup"
-                asChild
-              >
+              <Link href="/signup" asChild>
                 <Pressable disabled={loading}>
                   <Text style={styles.registerLink}>
                     Create account →
@@ -583,7 +527,7 @@ const styles = StyleSheet.create({
 
   brandName: {
     color: COLORS.navy,
-    fontSize: 22,
+    fontSize: 23,
     fontWeight: '900',
     letterSpacing: -0.5,
   },
@@ -602,7 +546,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 21,
+    borderRadius: 22,
     padding: 25,
     shadowColor: COLORS.navy,
     shadowOffset: {
@@ -614,28 +558,28 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 
-  orangeLine: {
-    width: 38,
+  accentLine: {
+    width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.orange,
-    marginBottom: 10,
+    backgroundColor: COLORS.lavender,
+    marginBottom: 12,
   },
 
   eyebrow: {
-    color: COLORS.orange,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1.3,
+    color: COLORS.lavenderDark,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
   },
 
   title: {
     color: COLORS.navy,
     fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '900',
+    lineHeight: 35,
+    fontWeight: '800',
     letterSpacing: -0.6,
-    marginTop: 5,
+    marginTop: 6,
   },
 
   subtitle: {
@@ -643,13 +587,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     marginTop: 7,
-    marginBottom: 21,
+    marginBottom: 22,
   },
 
   errorBox: {
     backgroundColor: COLORS.dangerSoft,
     borderWidth: 1,
-    borderColor: '#F2C8C8',
+    borderColor: '#FECACA',
     borderRadius: 12,
     padding: 12,
     flexDirection: 'row',
@@ -658,7 +602,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  errorIcon: {
+  messageIcon: {
     width: 30,
     height: 30,
     borderRadius: 9,
@@ -675,20 +619,20 @@ const styles = StyleSheet.create({
   errorTitle: {
     color: COLORS.danger,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     marginBottom: 3,
   },
 
   errorText: {
-    color: COLORS.danger,
-    fontSize: 11,
-    lineHeight: 17,
+    color: COLORS.text,
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   successBox: {
     backgroundColor: COLORS.successSoft,
     borderWidth: 1,
-    borderColor: '#B7E3C8',
+    borderColor: '#B7E4CA',
     borderRadius: 12,
     padding: 12,
     flexDirection: 'row',
@@ -697,51 +641,42 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  successIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
   successText: {
     flex: 1,
-    color: COLORS.success,
-    fontSize: 11,
-    lineHeight: 17,
-    fontWeight: '800',
+    color: COLORS.navy,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '700',
   },
 
   field: {
-    marginBottom: 16,
+    marginBottom: 17,
   },
 
   label: {
     color: COLORS.navy,
-    fontSize: 11,
-    fontWeight: '900',
-    marginBottom: 7,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
   },
 
   inputWrapper: {
     minHeight: 52,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 11,
-    backgroundColor: '#FAFBFC',
+    borderRadius: 12,
+    backgroundColor: COLORS.backgroundInput,
     flexDirection: 'row',
     alignItems: 'center',
   },
 
   inputWrapperActive: {
-    borderColor: COLORS.orange,
+    borderColor: COLORS.lavender,
     backgroundColor: COLORS.white,
   },
 
   inputIconBox: {
-    width: 45,
+    width: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -758,7 +693,7 @@ const styles = StyleSheet.create({
   } as any,
 
   eyeButton: {
-    minWidth: 45,
+    minWidth: 44,
     minHeight: 50,
     alignItems: 'center',
     justifyContent: 'center',
@@ -770,7 +705,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     marginTop: 2,
-    marginBottom: 21,
+    marginBottom: 22,
   },
 
   optionsRowSmall: {
@@ -787,55 +722,52 @@ const styles = StyleSheet.create({
     height: 19,
     borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: '#CBD2DA',
+    borderColor: '#C9C8D9',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
   },
 
   checkboxChecked: {
-    backgroundColor: COLORS.orange,
-    borderColor: COLORS.orange,
+    backgroundColor: COLORS.lavender,
+    borderColor: COLORS.lavender,
   },
 
   rememberText: {
     color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   forgotText: {
-    color: COLORS.orangeDark,
-    fontSize: 11,
-    fontWeight: '900',
+    color: COLORS.lavenderDark,
+    fontSize: 12,
+    fontWeight: '800',
   },
 
   button: {
-    minHeight: 52,
-    borderRadius: 10,
-    backgroundColor: COLORS.orange,
+    minHeight: 53,
+    borderRadius: 12,
+    backgroundColor: COLORS.lavender,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 9,
     paddingHorizontal: 16,
-    shadowColor: COLORS.orange,
+    shadowColor: COLORS.lavender,
     shadowOffset: {
       width: 0,
       height: 7,
     },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.2,
     shadowRadius: 13,
     elevation: 5,
   },
 
   buttonPressed: {
-    opacity: 0.86,
-    transform: [
-      {
-        translateY: 1,
-      },
-    ],
+    backgroundColor: COLORS.lavenderPressed,
+    opacity: 0.95,
+    transform: [{ translateY: 1 }],
   },
 
   buttonDisabled: {
@@ -845,13 +777,13 @@ const styles = StyleSheet.create({
   buttonText: {
     color: COLORS.white,
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
   },
 
   registerSection: {
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    marginTop: 22,
+    borderTopColor: COLORS.borderLight,
+    marginTop: 23,
     paddingTop: 18,
     alignItems: 'center',
   },
@@ -862,17 +794,18 @@ const styles = StyleSheet.create({
   },
 
   registerLink: {
-    color: COLORS.orangeDark,
+    color: COLORS.lavenderDark,
     fontSize: 12,
-    fontWeight: '900',
-    marginTop: 6,
+    fontWeight: '800',
+    marginTop: 7,
   },
 
   footer: {
     textAlign: 'center',
     color: COLORS.lightMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 18,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 19,
   },
 });
+

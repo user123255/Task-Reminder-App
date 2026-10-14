@@ -28,12 +28,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTaskFlowSettings } from "@/hooks/use-taskflow-settings";
 
 const COLORS = {
-  primary: "#FF7A00",
-  primaryDark: "#E56600",
-  primaryLight: "#FFF1E5",
+  primary: "#208AEF",
+  primaryDark: "#176FC1",
+  primaryLight: "#EAF4FF",
 
-  gold: "#DFAE45",
-  goldLight: "#FBF4E4",
+  gold: "#8B7DED",
+  goldLight: "#F0EDFF",
 
   navy: "#0B1F3A",
   navyDark: "#07162A",
@@ -61,7 +61,7 @@ const COLORS = {
   successLight: "#EAF6F0",
 
   warning: "#DFAE45",
-  warningLight: "#FBF4E4",
+  warningLight: "#FFF4DB",
 
   danger: "#D9534F",
   dangerLight: "#FCEDEC",
@@ -78,7 +78,6 @@ type Meeting = {
   createdAt: string;
 };
 
-const LEGACY_STORAGE_KEY = "@taskflow_meetings";
 const STORAGE_KEY_PREFIX = "@taskflow_meetings:";
 
 const platforms: Meeting["platform"][] = [
@@ -362,6 +361,7 @@ export default function MeetingsScreen() {
     }
   }, []);
 
+
   const loadMeetings = useCallback(async () => {
     if (!userId) {
       setMeetings([]);
@@ -375,50 +375,26 @@ export default function MeetingsScreen() {
       const key = getStorageKey(userId);
       const saved = await AsyncStorage.getItem(key);
 
-      if (saved) {
-        const parsed: unknown = JSON.parse(saved);
-
-        setMeetings(
-          Array.isArray(parsed) ? (parsed as Meeting[]) : [],
-        );
-      } else {
-        const legacySaved =
-          await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
-
-        if (legacySaved) {
-          const parsed: unknown = JSON.parse(legacySaved);
-
-          if (Array.isArray(parsed)) {
-            const legacyMeetings = parsed as Meeting[];
-
-            setMeetings(legacyMeetings);
-
-            await AsyncStorage.setItem(
-              key,
-              JSON.stringify(legacyMeetings),
-            );
-
-            await AsyncStorage.removeItem(
-              LEGACY_STORAGE_KEY,
-            );
-          } else {
-            setMeetings([]);
-          }
-        } else {
-          setMeetings([]);
-        }
+      if (!saved) {
+        setMeetings([]);
+        return;
       }
+
+      const parsed: unknown = JSON.parse(saved);
+
+      setMeetings(
+        Array.isArray(parsed) ? (parsed as Meeting[]) : [],
+      );
     } catch (error) {
       console.error("Failed to load meetings:", error);
       setMeetings([]);
 
-      showMessage(
-        "Unable to load your meetings right now.",
-      );
+      showMessage("Unable to load your meetings right now.");
     } finally {
       setLoading(false);
     }
   }, [showMessage, userId]);
+
 
   useEffect(() => {
     void loadMeetings();
@@ -3080,3 +3056,5 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
 });
+
+

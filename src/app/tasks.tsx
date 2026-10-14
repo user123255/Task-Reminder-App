@@ -43,22 +43,22 @@ type PriorityFilter =
   | 'low';
 
 const COLORS = {
-  navy: '#071A2F',
-  navy2: '#0B2239',
-  navy3: '#102E4A',
+  navy: '#172033',
+  navy2: '#101828',
+  navy3: '#263653',
 
-  orange: '#FF7A00',
-  orangeDark: '#E76500',
-  orangeSoft: '#FFF1E5',
+  orange: '#208AEF',
+  orangeDark: '#176FC1',
+  orangeSoft: '#EAF4FF',
 
-  background: '#F5F6F8',
+  background: '#F6F8FC',
   white: '#FFFFFF',
 
   text: '#172033',
   muted: '#667085',
   lightMuted: '#98A2B3',
 
-  border: '#E2E6EB',
+  border: '#E7ECF3',
 
   success: '#15803D',
   successSoft: '#ECFDF3',
@@ -3625,3 +3625,4 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
 });
+

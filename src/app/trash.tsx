@@ -22,25 +22,25 @@ import {
 } from "@/services/activities";
 
 const COLORS = {
-  navy: "#0B1F3A",
-  navyDark: "#07162A",
-  navySoft: "#132C4D",
+  navy: "#172033",
+  navyDark: "#101828",
+  navySoft: "#263653",
 
-  orange: "#FF7A00",
-  orangeDark: "#E96800",
-  orangeSoft: "#FFF1E5",
+  orange: "#208AEF",
+  orangeDark: "#176FC1",
+  orangeSoft: "#EAF4FF",
 
-  gold: "#DFAE45",
-  goldSoft: "#FFF8E8",
+  gold: "#8B7DED",
+  goldSoft: "#F0EDFF",
 
   white: "#FFFFFF",
-  background: "#F4F5F7",
+  background: "#F6F8FC",
 
-  text: "#142033",
-  muted: "#687386",
-  lightMuted: "#98A1AF",
+  text: "#172033",
+  muted: "#667085",
+  lightMuted: "#98A2B3",
 
-  border: "#E3E6EB",
+  border: "#E7ECF3",
 
   success: "#20A464",
   successSoft: "#EAF7F0",
@@ -1506,3 +1506,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+
+

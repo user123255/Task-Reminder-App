@@ -131,16 +131,9 @@ async function readSettings(userId: string): Promise<TaskFlowSettings> {
       return sanitizeSettings(JSON.parse(stored));
     }
 
-    // Migrate older TaskFlow versions that used one global settings key.
-    const legacyStored = await AsyncStorage.getItem(LEGACY_SETTINGS_KEY);
-
-    if (legacyStored) {
-      const migrated = sanitizeSettings(JSON.parse(legacyStored));
-      await AsyncStorage.setItem(userKey, JSON.stringify(migrated));
-      await AsyncStorage.removeItem(LEGACY_SETTINGS_KEY);
-      return migrated;
-    }
-
+    
+    // Never assign old shared settings to a newly signed-in account.
+    // Each account starts with its own defaults if no personal settings exist.
     return { ...DEFAULT_TASKFLOW_SETTINGS };
   } catch (error) {
     console.error('Failed to read TaskFlow settings:', error);

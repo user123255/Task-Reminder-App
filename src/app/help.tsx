@@ -21,12 +21,12 @@ const COLORS = {
   navyDark: "#07162A",
   navySoft: "#132C4D",
 
-  orange: "#FF7A00",
-  orangeDark: "#E96800",
-  orangeSoft: "#FFF1E5",
+  orange: "#208AEF",
+  orangeDark: "#176FC1",
+  orangeSoft: "#EAF4FF",
 
-  gold: "#DFAE45",
-  goldSoft: "#FFF8E8",
+  gold: "#8B7DED",
+  goldSoft: "#F0EDFF",
 
   white: "#FFFFFF",
   background: "#F4F5F7",
@@ -1664,3 +1664,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
+

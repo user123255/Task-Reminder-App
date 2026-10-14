@@ -1,0 +1,605 @@
+
+import React, { useMemo, useState } from 'react';
+import {
+  Modal,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, usePathname } from 'expo-router';
+
+import { Colors, Radii, Shadows } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
+
+type Route =
+  | '/'
+  | '/tasks'
+  | '/calendar'
+  | '/library'
+  | '/reports'
+  | '/ai-assist'
+  | '/meetings'
+  | '/trash'
+  | '/help'
+  | '/settings';
+
+type NavItem = {
+  route: Route;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+
+type SidebarProps = {
+  collapsed: boolean;
+  onToggle: () => void;
+};
+
+const WORKSPACE_ITEMS: NavItem[] = [
+  { route: '/', label: 'Home', icon: 'home-outline' },
+  { route: '/tasks', label: 'Tasks', icon: 'checkmark-circle-outline' },
+  { route: '/calendar', label: 'Calendar', icon: 'calendar-outline' },
+  { route: '/library', label: 'Library', icon: 'library-outline' },
+  { route: '/reports', label: 'Reports', icon: 'bar-chart-outline' },
+  { route: '/ai-assist', label: 'AI Assist', icon: 'sparkles-outline' },
+  { route: '/meetings', label: 'Meetings', icon: 'videocam-outline' },
+];
+
+const SUPPORT_ITEMS: NavItem[] = [
+  { route: '/trash', label: 'Trash', icon: 'trash-outline' },
+  { route: '/help', label: 'Help', icon: 'help-circle-outline' },
+  { route: '/settings', label: 'Settings', icon: 'settings-outline' },
+];
+
+const PUBLIC_ROUTES = new Set([
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/reset-password',
+  '/update-password',
+]);
+
+export function TaskFlowMobileSidebar({
+  collapsed,
+  onToggle,
+}: SidebarProps) {
+  const { width } = useWindowDimensions();
+  const pathname = usePathname();
+  const { displayName } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const isPhone = width < 700;
+  const isDesktop = width >= 1100;
+  const sidebarWidth = collapsed ? 82 : 260;
+
+  const initials = useMemo(() => {
+    const clean = (displayName || '').trim();
+
+    if (!clean) return 'U';
+
+    const words = clean.split(/\s+/);
+
+    return words.length >= 2
+      ? `${words[0][0]}${words[1][0]}`.toUpperCase()
+      : clean[0].toUpperCase();
+  }, [displayName]);
+
+  if (PUBLIC_ROUTES.has(pathname)) {
+    return null;
+  }
+
+  const navigate = (route: Route) => {
+    setMobileOpen(false);
+
+    if (pathname !== route) {
+      router.replace(route);
+    }
+  };
+
+  const isActive = (route: Route) => {
+    if (route === '/') return pathname === '/';
+
+    return pathname === route || pathname.startsWith(`${route}/`);
+  };
+
+  const renderNavItem = (item: NavItem) => {
+    const active = isActive(item.route);
+
+    return (
+      <Pressable
+        key={item.route}
+        onPress={() => navigate(item.route)}
+        style={({ pressed }) => [
+          styles.navItem,
+          collapsed && !isPhone && styles.navItemCollapsed,
+          active && styles.navItemActive,
+          pressed && styles.navItemPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={item.label}
+        accessibilityState={{ selected: active }}
+      >
+        <View
+          style={[
+            styles.navIconContainer,
+            active && styles.navIconContainerActive,
+          ]}
+        >
+          <Ionicons
+            name={item.icon}
+            size={21}
+            color={active ? Colors.primary : Colors.textSecondary}
+          />
+        </View>
+
+        {(!collapsed || isPhone) && (
+          <Text
+            style={[styles.navLabel, active && styles.navLabelActive]}
+            numberOfLines={1}
+          >
+            {item.label}
+          </Text>
+        )}
+
+        {active && <View style={styles.activeIndicator} />}
+      </Pressable>
+    );
+  };
+
+  const sidebarContent = (
+    <View style={[styles.sidebar, { width: isPhone ? 280 : sidebarWidth }]}>
+      <View
+        style={[
+          styles.header,
+          collapsed && !isPhone && styles.headerCollapsed,
+        ]}
+      >
+        <Pressable
+          onPress={() => navigate('/')}
+          style={[
+            styles.brandButton,
+            collapsed && !isPhone && styles.brandButtonCollapsed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Go to TaskFlow home"
+        >
+          <View style={styles.logo}>
+            <Text style={styles.logoText}>T</Text>
+            <View style={styles.logoCheck}>
+              <View style={styles.logoCheckShort} />
+              <View style={styles.logoCheckLong} />
+            </View>
+          </View>
+
+          {(!collapsed || isPhone) && (
+            <View style={styles.brandTextContainer}>
+              <Text style={styles.brandName}>TaskFlow</Text>
+              <Text style={styles.brandSubtitle}>
+                Your work. Your goals. Your flow.
+              </Text>
+            </View>
+          )}
+        </Pressable>
+
+        {isDesktop && (
+          <Pressable
+            onPress={onToggle}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <Ionicons
+              name={collapsed ? 'chevron-forward' : 'chevron-back'}
+              size={18}
+              color={Colors.textSecondary}
+            />
+          </Pressable>
+        )}
+
+        {isPhone && (
+          <Pressable
+            onPress={() => setMobileOpen(false)}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close navigation menu"
+          >
+            <Ionicons name="close" size={22} color={Colors.textSecondary} />
+          </Pressable>
+        )}
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {(!collapsed || isPhone) && (
+          <Text style={styles.sectionLabel}>WORKSPACE</Text>
+        )}
+
+        <View style={styles.navSection}>
+          {WORKSPACE_ITEMS.map(renderNavItem)}
+        </View>
+
+        <View style={styles.supportSection}>
+          {(!collapsed || isPhone) && (
+            <Text style={styles.sectionLabel}>YOUR SPACE</Text>
+          )}
+
+          {SUPPORT_ITEMS.map(renderNavItem)}
+        </View>
+      </ScrollView>
+
+      <Pressable
+        onPress={() => navigate('/settings')}
+        style={[
+          styles.profile,
+          collapsed && !isPhone && styles.profileCollapsed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Open profile settings"
+      >
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initials}</Text>
+        </View>
+
+        {(!collapsed || isPhone) && (
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName} numberOfLines={1}>
+              {displayName || 'Your profile'}
+            </Text>
+            <Text style={styles.profileWorkspace} numberOfLines={1}>
+              Personal workspace
+            </Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+
+  if (isPhone) {
+    return (
+      <>
+        <Pressable
+          onPress={() => setMobileOpen(true)}
+          style={styles.mobileMenuButton}
+          accessibilityRole="button"
+          accessibilityLabel="Open navigation menu"
+          hitSlop={8}
+        >
+          <Ionicons name="menu" size={24} color={Colors.navy} />
+        </Pressable>
+
+        <Modal
+          visible={mobileOpen}
+          animationType="fade"
+          transparent
+          statusBarTranslucent
+          onRequestClose={() => setMobileOpen(false)}
+        >
+          <View style={styles.modalRoot}>
+            <Pressable
+              style={styles.modalBackdrop}
+              onPress={() => setMobileOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close navigation menu"
+            />
+
+            <SafeAreaView style={styles.mobileDrawer}>
+              {sidebarContent}
+            </SafeAreaView>
+          </View>
+        </Modal>
+      </>
+    );
+  }
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[styles.desktopContainer, { width: sidebarWidth }]}
+    >
+      {sidebarContent}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  desktopContainer: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 50,
+  },
+
+  sidebar: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRightWidth: 1,
+    borderRightColor: Colors.border,
+    overflow: 'hidden',
+  },
+
+  header: {
+    minHeight: 82,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 8,
+  },
+
+  headerCollapsed: {
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+
+  brandButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+
+  brandButtonCollapsed: {
+    flex: 0,
+  },
+
+  logo: {
+    width: 42,
+    height: 42,
+    borderRadius: Radii.md,
+    backgroundColor: Colors.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+
+  logoText: {
+    color: Colors.white,
+    fontSize: 26,
+    lineHeight: 30,
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginTop: -2,
+  },
+
+  logoCheck: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    width: 15,
+    height: 12,
+  },
+
+  logoCheckShort: {
+    position: 'absolute',
+    left: 0,
+    top: 5,
+    width: 6,
+    height: 3,
+    backgroundColor: Colors.primary,
+    borderRadius: 2,
+    transform: [{ rotate: '45deg' }],
+  },
+
+  logoCheckLong: {
+    position: 'absolute',
+    left: 4,
+    top: 3,
+    width: 11,
+    height: 3,
+    backgroundColor: Colors.primary,
+    borderRadius: 2,
+    transform: [{ rotate: '-45deg' }],
+  },
+
+  brandTextContainer: {
+    marginLeft: 11,
+    flex: 1,
+    minWidth: 0,
+  },
+
+  brandName: {
+    color: Colors.textStrong,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+
+  brandSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 3,
+  },
+
+  iconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: Radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.backgroundSoft,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+
+  scrollContent: {
+    paddingHorizontal: 12,
+    paddingTop: 22,
+    paddingBottom: 18,
+  },
+
+  sectionLabel: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginHorizontal: 10,
+    marginBottom: 10,
+  },
+
+  navSection: {
+    gap: 5,
+  },
+
+  supportSection: {
+    marginTop: 28,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    gap: 5,
+  },
+
+  navItem: {
+    minHeight: 47,
+    borderRadius: Radii.md,
+    paddingHorizontal: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+
+  navItemCollapsed: {
+    justifyContent: 'center',
+    paddingHorizontal: 0,
+  },
+
+  navItemActive: {
+    backgroundColor: Colors.primaryLight,
+  },
+
+  navItemPressed: {
+    opacity: 0.72,
+  },
+
+  navIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: Radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  navIconContainerActive: {
+    backgroundColor: Colors.surface,
+  },
+
+  navLabel: {
+    flex: 1,
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 9,
+  },
+
+  navLabelActive: {
+    color: Colors.primaryPressed,
+    fontWeight: '700',
+  },
+
+  activeIndicator: {
+    width: 3,
+    height: 20,
+    borderRadius: 2,
+    backgroundColor: Colors.primary,
+    position: 'absolute',
+    right: 0,
+  },
+
+  profile: {
+    minHeight: 76,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+  },
+
+  profileCollapsed: {
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: Radii.round,
+    backgroundColor: Colors.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  avatarText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  profileInfo: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 10,
+  },
+
+  profileName: {
+    color: Colors.textStrong,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  profileWorkspace: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    marginTop: 3,
+  },
+
+  mobileMenuButton: {
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    width: 44,
+    height: 44,
+    borderRadius: Radii.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+    ...Shadows.card,
+  },
+
+  modalRoot: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.overlay,
+  },
+
+  mobileDrawer: {
+    width: 280,
+    maxWidth: '86%',
+    height: '100%',
+    backgroundColor: Colors.surface,
+    borderTopRightRadius: Radii.xl,
+    borderBottomRightRadius: Radii.xl,
+    overflow: 'hidden',
+    ...Shadows.elevated,
+  },
+});
+
+export default TaskFlowMobileSidebar;

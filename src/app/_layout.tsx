@@ -289,16 +289,10 @@ function RootNavigator() {
           collapsed={effectiveSidebarCollapsed}
           onToggle={() => {
             if (isDesktop) {
-              setSidebarCollapsed(
-                (current) => !current,
-              );
+              setSidebarCollapsed((current) => !current);
             }
           }}
         />
-
-        {/* ===================================================
-            MAIN APPLICATION AREA
-        =================================================== */}
 
         <View
           style={{

@@ -1,9 +1,11 @@
+
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -17,41 +19,13 @@ import {
   View,
 } from "react-native";
 
+import { Colors, Radii, Shadows } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import {
   carryForwardOverdueActivities,
   fetchActivities,
   updateActivityCompletion,
 } from "@/services/activities";
-import { Colors } from "@/constants/theme";
-
-const LIFE_AREAS = [
-  {
-    name: "Spiritual",
-    icon: "sparkles-outline" as const,
-    color: Colors.spiritual,
-  },
-  {
-    name: "Health",
-    icon: "heart-outline" as const,
-    color: Colors.health,
-  },
-  {
-    name: "Relationship",
-    icon: "people-outline" as const,
-    color: Colors.relationship,
-  },
-  {
-    name: "Career",
-    icon: "briefcase-outline" as const,
-    color: Colors.career,
-  },
-  {
-    name: "Other",
-    icon: "grid-outline" as const,
-    color: Colors.other,
-  },
-];
 
 type Activity = {
   id: string | number;
@@ -64,51 +38,42 @@ type Activity = {
   repeat?: string | null;
 };
 
+const LIFE_AREAS = [
+  { name: "Spiritual", icon: "sparkles-outline" as const, color: Colors.spiritual },
+  { name: "Health", icon: "heart-outline" as const, color: Colors.health },
+  { name: "Relationship", icon: "people-outline" as const, color: Colors.relationship },
+  { name: "Career", icon: "briefcase-outline" as const, color: Colors.career },
+  { name: "Other", icon: "grid-outline" as const, color: Colors.other },
+];
+
 function getLocalDate() {
   const now = new Date();
-
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-
   return `${year}-${month}-${day}`;
 }
 
 function formatTime(value?: string | null) {
-  if (!value) {
-    return "No time";
-  }
+  if (!value) return "No time";
 
-  const parts = value.split(":");
-  const hour = Number(parts[0]);
-  const minute = parts[1] ?? "00";
+  const [hourPart, minutePart = "00"] = value.split(":");
+  const hour = Number(hourPart);
 
-  if (Number.isNaN(hour)) {
-    return value;
-  }
+  if (Number.isNaN(hour)) return value;
 
-  const suffix = hour >= 12 ? "PM" : "AM";
-  const displayHour = hour % 12 || 12;
-
-  return `${displayHour}:${minute} ${suffix}`;
+  return `${hour % 12 || 12}:${minutePart} ${hour >= 12 ? "PM" : "AM"}`;
 }
 
 function getGreeting() {
   const hour = new Date().getHours();
-
-  if (hour < 12) {
-    return "Good morning";
-  }
-
-  if (hour < 17) {
-    return "Good afternoon";
-  }
-
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
   return "Good evening";
 }
 
 function getActivityTitle(activity: Activity) {
-  return activity.title || "Untitled task";
+  return activity.title?.trim() || "Untitled task";
 }
 
 function getArea(activity: Activity) {
@@ -118,153 +83,117 @@ function getArea(activity: Activity) {
 function getPriorityColor(priority?: string | null) {
   switch (priority?.toLowerCase()) {
     case "high":
-      return Colors.danger;
-
+      return Colors.priorityHigh;
     case "low":
-      return Colors.success;
-
+      return Colors.priorityLow;
     default:
-      return Colors.warning;
+      return Colors.priorityMedium;
   }
 }
 
-function getDisplayName(
-  session: ReturnType<typeof useAuth>["session"]
-) {
+function getDisplayName(session: ReturnType<typeof useAuth>["session"]) {
   const metadata = session?.user?.user_metadata;
-
   const fullName =
     typeof metadata?.full_name === "string"
       ? metadata.full_name.trim()
       : "";
-
   const name =
     typeof metadata?.name === "string"
       ? metadata.name.trim()
       : "";
 
-  if (fullName) {
-    return fullName;
-  }
-
-  if (name) {
-    return name;
-  }
-
-  return "there";
+  return fullName || name || "there";
 }
 
 function getInitials(name: string) {
-  if (!name || name === "there") {
-    return "T";
-  }
+  if (!name || name === "there") return "T";
 
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const parts = name.trim().split(/\s+/).filter(Boolean);
 
-  if (parts.length === 1) {
-    return parts[0].charAt(0).toUpperCase();
-  }
-
-  return (
-    parts[0].charAt(0) +
-    parts[parts.length - 1].charAt(0)
-  ).toUpperCase();
+  return parts.length > 1
+    ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+    : parts[0][0].toUpperCase();
 }
 
 function createActivityDate(
   date?: string | null,
   time?: string | null
 ) {
-  if (!date) {
-    return null;
-  }
+  if (!date) return null;
 
   const [year, month, day] = date.split("-").map(Number);
-
-  if (!year || !month || !day) {
-    return null;
-  }
+  if (!year || !month || !day) return null;
 
   if (!time) {
-    return new Date(
-      year,
-      month - 1,
-      day,
-      23,
-      59,
-      59
-    );
+    return new Date(year, month - 1, day, 23, 59, 59);
   }
 
   const [hour = 0, minute = 0, second = 0] = time
     .split(":")
     .map(Number);
 
-  return new Date(
-    year,
-    month - 1,
-    day,
-    hour,
-    minute,
-    second
-  );
+  return new Date(year, month - 1, day, hour, minute, second);
 }
 
-function getMinutesUntil(activity: Activity) {
+function getCountdownText(activity: Activity, now: Date) {
   const date = createActivityDate(
     activity.scheduled_date,
     activity.scheduled_time
   );
 
-  if (!date) {
-    return null;
-  }
+  if (!date) return "Scheduled";
 
-  return Math.round(
-    (date.getTime() - Date.now()) / 60000
-  );
-}
+  const minutes = Math.round((date.getTime() - now.getTime()) / 60000);
 
-function getCountdownText(activity: Activity) {
-  const minutes = getMinutesUntil(activity);
-
-  if (minutes === null) {
-    return "Scheduled";
-  }
-
-  if (minutes < 0) {
-    return "Started";
-  }
-
-  if (minutes === 0) {
-    return "Starting now";
-  }
-
-  if (minutes < 60) {
-    return `In ${minutes} min`;
-  }
+  if (minutes < 0) return "Time has passed";
+  if (minutes === 0) return "Starting now";
+  if (minutes < 60) return `In ${minutes} min`;
 
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
 
   if (hours < 24) {
-    if (remainingMinutes === 0) {
-      return `In ${hours}h`;
-    }
-
-    return `In ${hours}h ${remainingMinutes}m`;
+    return remainingMinutes === 0
+      ? `In ${hours}h`
+      : `In ${hours}h ${remainingMinutes}m`;
   }
 
-  const days = Math.floor(hours / 24);
-
-  return `In ${days}d`;
+  return `In ${Math.floor(hours / 24)}d`;
 }
 
-function navigateTo(path: string) {
+function goTo(path: string) {
   router.push(path as never);
+}
+
+function SectionHeading({
+  title,
+  subtitle,
+  action,
+  onAction,
+}: {
+  title: string;
+  subtitle: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionHeadingText}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+      </View>
+
+      {action && onAction ? (
+        <Pressable
+          onPress={onAction}
+          accessibilityRole="button"
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Text style={styles.sectionAction}>{action}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 }
 
 function StatCard({
@@ -273,193 +202,41 @@ function StatCard({
   value,
   subtitle,
   color,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string | number;
-  subtitle: string;
-  color: string;
-}) {
-  return (
-    <View style={styles.statCard}>
-      <View
-        style={[
-          styles.statIcon,
-          {
-            backgroundColor: `${color}16`,
-          },
-        ]}
-      >
-        <Ionicons
-          name={icon}
-          size={20}
-          color={color}
-        />
-      </View>
-
-      <View style={styles.statContent}>
-        <Text style={styles.statLabel}>
-          {label}
-        </Text>
-
-        <Text style={styles.statValue}>
-          {value}
-        </Text>
-
-        <Text style={styles.statSubtitle}>
-          {subtitle}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function SidebarItem({
-  icon,
-  label,
-  active = false,
+  tint,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  active?: boolean;
-  onPress?: () => void;
+  value: number;
+  subtitle: string;
+  color: string;
+  tint: string;
+  onPress: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.sidebarItem,
-        active && styles.sidebarItemActive,
-        pressed && styles.sidebarItemPressed,
+        styles.statCard,
+        pressed && styles.pressed,
       ]}
     >
-      <Ionicons
-        name={icon}
-        size={20}
-        color={
-          active
-            ? Colors.primary
-            : "#B7C4D6"
-        }
-      />
-
-      <Text
-        style={[
-          styles.sidebarItemText,
-          active &&
-            styles.sidebarItemTextActive,
-        ]}
-      >
-        {label}
-      </Text>
-
-      {active && (
-        <View style={styles.activeIndicator} />
-      )}
-    </Pressable>
-  );
-}
-
-function ActivityRow({
-  activity,
-  onToggle,
-}: {
-  activity: Activity;
-  onToggle: () => void;
-}) {
-  const completed = Boolean(activity.completed);
-
-  const priorityColor = getPriorityColor(
-    activity.priority
-  );
-
-  return (
-    <View style={styles.activityRow}>
-      <Pressable
-        onPress={onToggle}
-        style={({ pressed }) => [
-          styles.checkbox,
-          completed &&
-            styles.checkboxCompleted,
-          pressed && styles.checkboxPressed,
-        ]}
-      >
-        {completed && (
-          <Ionicons
-            name="checkmark"
-            size={15}
-            color={Colors.white}
-          />
-        )}
-      </Pressable>
-
-      <View style={styles.activityMain}>
-        <Text
-          numberOfLines={1}
-          style={[
-            styles.activityTitle,
-            completed &&
-              styles.activityTitleCompleted,
-          ]}
-        >
-          {getActivityTitle(activity)}
-        </Text>
-
-        <View style={styles.activityMeta}>
-          <View style={styles.areaBadge}>
-            <Text style={styles.areaBadgeText}>
-              {getArea(activity)}
-            </Text>
-          </View>
-
-          {activity.priority && (
-            <View
-              style={[
-                styles.priorityDot,
-                {
-                  backgroundColor:
-                    priorityColor,
-                },
-              ]}
-            />
-          )}
-
-          {activity.repeat &&
-            activity.repeat !== "none" && (
-              <Ionicons
-                name="repeat-outline"
-                size={13}
-                color={Colors.textMuted}
-                style={{
-                  marginLeft: 7,
-                }}
-              />
-            )}
-        </View>
+      <View style={[styles.statIcon, { backgroundColor: tint }]}>
+        <Ionicons name={icon} size={21} color={color} />
       </View>
 
-      <Text style={styles.activityTime}>
-        {formatTime(
-          activity.scheduled_time
-        )}
-      </Text>
+      <View style={styles.statText}>
+        <Text style={styles.statLabel}>{label}</Text>
+        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statSubtitle}>{subtitle}</Text>
+      </View>
 
-      <Pressable
-        style={styles.moreButton}
-        onPress={() =>
-          navigateTo(
-            `/add-activity?edit=${activity.id}`
-          )
-        }
-      >
-        <Ionicons
-          name="ellipsis-horizontal"
-          size={20}
-          color={Colors.textMuted}
-        />
-      </Pressable>
-    </View>
+      <Ionicons
+        name="chevron-forward"
+        size={16}
+        color={Colors.textMuted}
+      />
+    </Pressable>
   );
 }
 
@@ -477,258 +254,280 @@ function EmptyState({
   onPress?: () => void;
 }) {
   return (
-    <View style={styles.emptyCard}>
+    <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
-        <Ionicons
-          name={icon}
-          size={28}
-          color={Colors.primary}
-        />
+        <Ionicons name={icon} size={27} color={Colors.primary} />
       </View>
 
-      <Text style={styles.emptyTitle}>
-        {title}
-      </Text>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyDescription}>{description}</Text>
 
-      <Text style={styles.emptyText}>
-        {description}
-      </Text>
-
-      {buttonText && onPress && (
+      {buttonText && onPress ? (
         <Pressable
-          style={({ pressed }) => [
-            styles.smallAddButton,
-            pressed &&
-              styles.buttonPressed,
-          ]}
           onPress={onPress}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            pressed && styles.pressed,
+          ]}
         >
-          <Ionicons
-            name="add"
-            size={17}
-            color={Colors.white}
-          />
-
-          <Text style={styles.smallAddText}>
-            {buttonText}
-          </Text>
+          <Ionicons name="add" size={18} color={Colors.white} />
+          <Text style={styles.primaryButtonText}>{buttonText}</Text>
         </Pressable>
-      )}
+      ) : null}
+    </View>
+  );
+}
+
+function ActivityRow({
+  activity,
+  onToggle,
+}: {
+  activity: Activity;
+  onToggle: () => void;
+}) {
+  const completed = Boolean(activity.completed);
+
+  return (
+    <View style={styles.activityRow}>
+      <Pressable
+        onPress={onToggle}
+        style={[
+          styles.checkbox,
+          completed && styles.checkboxChecked,
+        ]}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: completed }}
+        accessibilityLabel={`Mark ${getActivityTitle(activity)} ${
+          completed ? "incomplete" : "complete"
+        }`}
+      >
+        {completed ? (
+          <Ionicons name="checkmark" size={15} color={Colors.white} />
+        ) : null}
+      </Pressable>
+
+      <View style={styles.activityMain}>
+        <Text
+          numberOfLines={2}
+          style={[
+            styles.activityTitle,
+            completed && styles.activityTitleCompleted,
+          ]}
+        >
+          {getActivityTitle(activity)}
+        </Text>
+
+        <View style={styles.activityMeta}>
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{getArea(activity)}</Text>
+          </View>
+
+          {activity.priority ? (
+            <View
+              style={[
+                styles.priorityDot,
+                { backgroundColor: getPriorityColor(activity.priority) },
+              ]}
+            />
+          ) : null}
+
+          {activity.repeat && activity.repeat !== "none" ? (
+            <Ionicons
+              name="repeat-outline"
+              size={13}
+              color={Colors.textMuted}
+            />
+          ) : null}
+        </View>
+      </View>
+
+      <Text style={styles.activityTime}>
+        {formatTime(activity.scheduled_time)}
+      </Text>
+
+      <Pressable
+        onPress={() => goTo(`/add-activity?edit=${activity.id}`)}
+        style={styles.moreButton}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${getActivityTitle(activity)}`}
+      >
+        <Ionicons
+          name="ellipsis-horizontal"
+          size={20}
+          color={Colors.textSecondary}
+        />
+      </Pressable>
     </View>
   );
 }
 
 export default function Dashboard() {
-  const { width } = useWindowDimensions();
-  const { session } = useAuth();
+const { width } = useWindowDimensions();
+const { session } = useAuth();
+const userId = session?.user?.id ?? null;
+const requestId = useRef(0);
 
-  const isDesktop = width >= 900;
   const isMobile = width < 600;
+  const isWide = width >= 900;
 
-  const displayName = useMemo(
-    () => getDisplayName(session),
-    [session]
-  );
+  const displayName = useMemo(() => getDisplayName(session), [session]);
+  const initials = useMemo(() => getInitials(displayName), [displayName]);
 
-  const initials = useMemo(
-    () => getInitials(displayName),
-    [displayName]
-  );
-
-  const email =
-    session?.user?.email || "Personal workspace";
-
-  const [activities, setActivities] =
-    useState<Activity[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const [now, setNow] =
-    useState(new Date());
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [now, setNow] = useState(new Date());
 
   const today = getLocalDate();
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(new Date());
-    }, 30000);
-
-    return () => {
-      clearInterval(interval);
-    };
+    const interval = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(interval);
   }, []);
 
-  const loadActivities =
-    useCallback(async () => {
-      try {
-        await carryForwardOverdueActivities();
+ 
+  const loadActivities = useCallback(async () => {
+    if (!userId) {
+      setActivities([]);
+      setLoadError(false);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
-        const data = await fetchActivities();
+    const currentRequestId = ++requestId.current;
+    setLoadError(false);
 
-        setActivities(data);
-      } catch (error) {
-        console.error(
-          "Failed to load activities:",
-          error
-        );
-      } finally {
+    try {
+      await carryForwardOverdueActivities();
+      const data = await fetchActivities();
+
+      // Ignore results from an older account or an outdated request.
+      if (requestId.current === currentRequestId) {
+        setActivities(data as Activity[]);
+      }
+    } catch (error) {
+      if (requestId.current === currentRequestId) {
+        console.error("Failed to load activities:", error);
+        setLoadError(true);
+      }
+    } finally {
+      if (requestId.current === currentRequestId) {
         setLoading(false);
         setRefreshing(false);
       }
-    }, []);
+    }
+  }, [userId]);
 
   useEffect(() => {
-    loadActivities();
-  }, [loadActivities]);
+    // Invalidate previous requests whenever the account changes.
+    requestId.current += 1;
+    setActivities([]);
+    setLoadError(false);
+    setRefreshing(false);
+
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    void loadActivities();
+
+    return () => {
+      requestId.current += 1;
+    };
+  }, [userId, loadActivities]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadActivities();
+    void loadActivities();
   }, [loadActivities]);
 
-  const todayActivities = useMemo(() => {
-    return activities
-      .filter(
+  const todayActivities = useMemo(
+    () => activities.filter((activity) => activity.scheduled_date === today),
+    [activities, today]
+  );
+
+  const completedToday = useMemo(
+    () => todayActivities.filter((activity) => activity.completed),
+    [todayActivities]
+  );
+
+  const upcoming = useMemo(
+    () =>
+      activities.filter(
         (activity) =>
-          activity.scheduled_date === today
-      )
-      .sort((a, b) =>
-        (
-          a.scheduled_time || ""
-        ).localeCompare(
-          b.scheduled_time || ""
-        )
-      );
-  }, [activities, today]);
+          Boolean(activity.scheduled_date) &&
+          activity.scheduled_date! > today &&
+          !activity.completed
+      ),
+    [activities, today]
+  );
 
-  const completedToday = useMemo(() => {
-    return todayActivities.filter(
-      (activity) =>
-        Boolean(activity.completed)
-    );
-  }, [todayActivities]);
-
-  const upcoming = useMemo(() => {
-    return activities.filter(
-      (activity) =>
-        Boolean(activity.scheduled_date) &&
-        activity.scheduled_date! > today &&
-        !activity.completed
-    );
-  }, [activities, today]);
-
-  const overdue = useMemo(() => {
-    return activities.filter(
-      (activity) =>
-        Boolean(activity.scheduled_date) &&
-        activity.scheduled_date! < today &&
-        !activity.completed
-    );
-  }, [activities, today]);
+  const overdue = useMemo(
+    () =>
+      activities.filter(
+        (activity) =>
+          Boolean(activity.scheduled_date) &&
+          activity.scheduled_date! < today &&
+          !activity.completed
+      ),
+    [activities, today]
+  );
 
   const nextActivity = useMemo(() => {
-    const currentTime = now.getTime();
-
-    const candidates = activities
-      .filter(
-        (activity) =>
-          !activity.completed
-      )
-      .map((activity) => {
-        const date = createActivityDate(
+    return activities
+      .filter((activity) => !activity.completed)
+      .map((activity) => ({
+        activity,
+        date: createActivityDate(
           activity.scheduled_date,
           activity.scheduled_time
-        );
-
-        return {
-          activity,
-          date,
-        };
-      })
+        ),
+      }))
       .filter(
-        (item) =>
-          item.date !== null &&
-          item.date.getTime() >=
-            currentTime
+        (item) => item.date !== null && item.date.getTime() >= now.getTime()
       )
-      .sort(
-        (a, b) =>
-          a.date!.getTime() -
-          b.date!.getTime()
-      );
-
-    return (
-      candidates[0]?.activity || null
-    );
+      .sort((a, b) => a.date!.getTime() - b.date!.getTime())[0]?.activity ?? null;
   }, [activities, now]);
 
   const progress =
     todayActivities.length > 0
-      ? Math.round(
-          (completedToday.length /
-            todayActivities.length) *
-            100
-        )
+      ? Math.round((completedToday.length / todayActivities.length) * 100)
       : 0;
 
   const areaCounts = useMemo(() => {
-    const counts: Record<
-      string,
-      number
-    > = {};
+    const counts: Record<string, number> = {};
 
-    todayActivities.forEach(
-      (activity) => {
-        const area = getArea(activity);
-
-        counts[area] =
-          (counts[area] || 0) + 1;
-      }
-    );
+    todayActivities.forEach((activity) => {
+      const area = getArea(activity);
+      counts[area] = (counts[area] || 0) + 1;
+    });
 
     return counts;
   }, [todayActivities]);
 
-  const handleToggle = async (
-    activity: Activity
-  ) => {
-    const newValue =
-      !activity.completed;
+  const handleToggle = async (activity: Activity) => {
+    const previousValue = Boolean(activity.completed);
+    const newValue = !previousValue;
 
     setActivities((current) =>
       current.map((item) =>
-        item.id === activity.id
-          ? {
-              ...item,
-              completed: newValue,
-            }
-          : item
+        item.id === activity.id ? { ...item, completed: newValue } : item
       )
     );
 
     try {
-      await updateActivityCompletion(
-        String(activity.id),
-        newValue
-      );
+      await updateActivityCompletion(String(activity.id), newValue);
     } catch (error) {
-      console.error(
-        "Failed to update activity:",
-        error
-      );
+      console.error("Failed to update activity:", error);
 
       setActivities((current) =>
         current.map((item) =>
           item.id === activity.id
-            ? {
-                ...item,
-                completed:
-                  activity.completed,
-              }
+            ? { ...item, completed: previousValue }
             : item
         )
       );
@@ -737,177 +536,98 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <View
-        style={styles.loadingContainer}
-      >
+      <View style={styles.loadingScreen}>
         <View style={styles.loadingLogo}>
-          <View style={styles.loadingLogoInner}>
-            <Ionicons
-              name="checkmark"
-              size={27}
-              color={Colors.white}
-            />
-          </View>
+          <Ionicons name="checkmark" size={30} color={Colors.white} />
         </View>
-
-        <Text style={styles.loadingTitle}>
-          TaskFlow
-        </Text>
-
+        <Text style={styles.loadingTitle}>TaskFlow</Text>
         <ActivityIndicator
-          size="small"
           color={Colors.primary}
-          style={{
-            marginTop: 18,
-          }}
+          size="small"
+          style={styles.loadingSpinner}
         />
-
-        <Text style={styles.loadingText}>
-          Preparing your workspace...
-        </Text>
+        <Text style={styles.loadingCaption}>Preparing your workspace...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
       <View style={styles.main}>
-        <View style={styles.topbar}>
-          {!isDesktop && (
-            <View
-              style={styles.mobileBrand}
-            >
-              <View
-                style={styles.mobileLogo}
-              >
-                <Ionicons
-                  name="checkmark"
-                  size={20}
-                  color={Colors.white}
-                />
+        <View style={[styles.topbar, isMobile && styles.mobileTopbar]}>
+          {!isWide ? (
+            <View style={styles.mobileBrand}>
+              <View style={styles.brandMark}>
+                <Ionicons name="checkmark" size={21} color={Colors.white} />
               </View>
-
-              <Text
-                style={
-                  styles.mobileBrandText
-                }
-              >
-                TaskFlow
-              </Text>
+              <Text style={styles.brandName}>TaskFlow</Text>
             </View>
+          ) : (
+            <Text style={styles.workspaceLabel}>MY WORKSPACE</Text>
           )}
 
           <Pressable
-            style={[
-              styles.searchBox,
-              !isDesktop &&
-                styles.mobileSearchBox,
-            ]}
-            onPress={() =>
-              navigateTo("/tasks")
-            }
+            onPress={() => goTo("/tasks")}
+            style={[styles.searchBox, isMobile && styles.mobileSearchBox]}
+            accessibilityRole="button"
+            accessibilityLabel="Open tasks"
           >
             <Ionicons
               name="search-outline"
               size={19}
-              color={Colors.textMuted}
+              color={Colors.textSecondary}
             />
-
-            <Text
-              numberOfLines={1}
-              style={
-                styles.searchPlaceholder
-              }
-            >
-              Search tasks, meetings,
-              reports...
-            </Text>
-
-            {isDesktop && (
-              <View
-                style={
-                  styles.searchShortcut
-                }
-              >
-                <Text
-                  style={
-                    styles.searchShortcutText
-                  }
-                >
-                  Ctrl K
-                </Text>
-              </View>
+            {!isMobile ? (
+              <Text style={styles.searchPlaceholder}>
+                Search your workspace...
+              </Text>
+            ) : (
+              <Text style={styles.searchPlaceholder}>Search tasks</Text>
             )}
+            {isWide ? (
+              <View style={styles.shortcut}>
+                <Text style={styles.shortcutText}>⌘ K</Text>
+              </View>
+            ) : null}
           </Pressable>
 
-          <View
-            style={styles.topbarActions}
-          >
+          <View style={styles.topbarActions}>
             <Pressable
-              style={styles.iconButton}
-              onPress={() =>
-                navigateTo("/settings")
-              }
+              onPress={() => goTo("/settings")}
+              style={styles.notificationButton}
+              accessibilityRole="button"
+              accessibilityLabel="Open settings and notifications"
             >
               <Ionicons
                 name="notifications-outline"
-                size={21}
-                color={
-                  Colors.textOnDark
-                }
-              />
-
-              <View
-                style={
-                  styles.notificationDot
-                }
+                size={20}
+                color={Colors.textStrong}
               />
             </Pressable>
 
-            <Pressable
-              style={styles.aiButton}
-              onPress={() =>
-                navigateTo("/ai-assist")
-              }
-            >
-              <Ionicons
-                name="sparkles"
-                size={17}
-                color={Colors.white}
-              />
-
-              {isDesktop && (
-                <Text
-                  style={
-                    styles.aiButtonText
-                  }
-                >
-                  AI Assist
-                </Text>
-              )}
-            </Pressable>
-
-            <Pressable
-              style={styles.topAvatar}
-              onPress={() =>
-                navigateTo("/settings")
-              }
-            >
-              <Text
-                style={
-                  styles.topAvatarText
-                }
+            {isWide ? (
+              <Pressable
+                onPress={() => goTo("/ai-assist")}
+                style={styles.aiButton}
               >
-                {initials}
-              </Text>
+                <Ionicons name="sparkles" size={16} color={Colors.white} />
+                <Text style={styles.aiButtonText}>AI Assist</Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={() => goTo("/settings")}
+              style={styles.avatar}
+              accessibilityRole="button"
+              accessibilityLabel="Open your profile"
+            >
+              <Text style={styles.avatarText}>{initials}</Text>
             </Pressable>
           </View>
         </View>
 
         <ScrollView
-          showsVerticalScrollIndicator={
-            false
-          }
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -917,242 +637,133 @@ export default function Dashboard() {
           }
           contentContainerStyle={[
             styles.content,
-            isMobile &&
-              styles.mobileContent,
+            isMobile && styles.mobileContent,
           ]}
         >
-          <View
-            style={[
-              styles.greetingRow,
-              isMobile &&
-                styles.mobileGreetingRow,
-            ]}
-          >
-            <View
-              style={styles.greetingContent}
-            >
-              <Text
-                style={[
-                  styles.greeting,
-                  isMobile &&
-                    styles.mobileGreeting,
-                ]}
-              >
-                {getGreeting()},{" "}
-                {displayName}
+          <View style={styles.greetingRow}>
+            <View style={styles.greetingText}>
+              <Text style={[styles.greeting, isMobile && styles.mobileGreeting]}>
+                {getGreeting()}, {displayName}
               </Text>
-
-              <Text
-                style={styles.subtitle}
-              >
-                Here's what's happening
-                with your day.
+              <Text style={styles.subtitle}>
+                Make today count, one task at a time.
               </Text>
             </View>
 
             <Pressable
-              style={({ pressed }) => [
-                styles.addButton,
-                pressed &&
-                  styles.buttonPressed,
-              ]}
-              onPress={() =>
-                navigateTo(
-                  "/add-activity"
-                )
-              }
+              onPress={() => goTo("/add-activity")}
+              style={styles.newTaskButton}
+              accessibilityRole="button"
             >
-              <Ionicons
-                name="add"
-                size={21}
-                color={Colors.white}
-              />
-
-              {!isMobile && (
-                <Text
-                  style={
-                    styles.addButtonText
-                  }
-                >
-                  New Task
-                </Text>
-              )}
+              <Ionicons name="add" size={21} color={Colors.white} />
+              {!isMobile ? (
+                <Text style={styles.newTaskText}>New task</Text>
+              ) : null}
             </Pressable>
           </View>
 
-          <View
-            style={styles.progressCard}
-          >
-            <View
-              style={
-                styles.progressHeader
-              }
-            >
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={
-                    styles.progressTitle
-                  }
-                >
-                  Today's progress
+          {loadError ? (
+            <View style={styles.errorBanner}>
+              <Ionicons
+                name="cloud-offline-outline"
+                size={22}
+                color={Colors.danger}
+              />
+              <View style={styles.errorTextWrap}>
+                <Text style={styles.errorTitle}>Couldn't load your activities</Text>
+                <Text style={styles.errorMessage}>
+                  Check your connection and try again. Your dashboard may be
+                  incomplete until activities load.
                 </Text>
+              </View>
+              <Pressable onPress={onRefresh} style={styles.retryButton}>
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
-                <Text
-                  style={
-                    styles.progressDescription
-                  }
-                >
-                  {completedToday.length}{" "}
-                  of{" "}
-                  {todayActivities.length}{" "}
-                  tasks completed
+          <View style={styles.progressCard}>
+            <View style={styles.progressTop}>
+              <View style={styles.progressCopy}>
+                <View style={styles.eyebrowRow}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.eyebrow}>YOUR DAILY MOMENTUM</Text>
+                </View>
+                <Text style={styles.progressTitle}>Today's progress</Text>
+                <Text style={styles.progressSubtitle}>
+                  {completedToday.length} of {todayActivities.length} tasks
+                  completed
                 </Text>
               </View>
 
-              <View
-                style={
-                  styles.progressPercentageBox
-                }
-              >
-                <Text
-                  style={
-                    styles.progressPercentage
-                  }
-                >
-                  {progress}%
-                </Text>
+              <View style={styles.progressCircle}>
+                <Text style={styles.progressPercent}>{progress}%</Text>
               </View>
             </View>
 
-            <View
-              style={styles.progressTrack}
-            >
+            <View style={styles.progressTrack}>
               <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${progress}%`,
-                  },
-                ]}
+                style={[styles.progressFill, { width: `${progress}%` }]}
               />
             </View>
 
-            <View
-              style={
-                styles.progressFooter
-              }
-            >
-              <Text
-                style={
-                  styles.progressFooterText
-                }
-              >
-                {progress >= 80
-                  ? "Excellent progress today."
-                  : progress >= 50
-                  ? "You're making good progress."
-                  : "Let's get your day moving."}
+            <View style={styles.progressBottom}>
+              <Text style={styles.progressMessage}>
+                {progress === 100 && todayActivities.length > 0
+                  ? "Wonderful work — you've completed today's plan."
+                  : progress >= 60
+                    ? "You're building great momentum."
+                    : "Small steps add up. Keep going."}
               </Text>
-
-              <View
-                style={
-                  styles.progressArrow
-                }
-              >
-                <Ionicons
-                  name={
-                    progress >= 80
-                      ? "rocket-outline"
-                      : "arrow-forward-outline"
-                  }
-                  size={17}
-                  color={Colors.primary}
-                />
-              </View>
+              <Ionicons
+name="arrow-up-right-box"             
+   size={19}
+                color={Colors.lavender}
+              />
             </View>
           </View>
 
-          <View
-            style={[
-              styles.statsGrid,
-              isMobile &&
-                styles.mobileStatsGrid,
-            ]}
-          >
+          <View style={[styles.statsGrid, isMobile && styles.mobileStatsGrid]}>
             <StatCard
-              icon="today-outline"
+              icon="sunny-outline"
               label="Today"
-              value={
-                todayActivities.length
-              }
+              value={todayActivities.length}
               subtitle={`${completedToday.length} completed`}
               color={Colors.primary}
+              tint={Colors.primaryLight}
+              onPress={() => goTo("/tasks")}
             />
-
             <StatCard
               icon="calendar-outline"
               label="Upcoming"
               value={upcoming.length}
               subtitle="Future tasks"
-              color="#7F56D9"
+              color={Colors.lavender}
+              tint={Colors.lavenderLight}
+              onPress={() => goTo("/calendar")}
             />
-
             <StatCard
               icon="alert-circle-outline"
               label="Overdue"
               value={overdue.length}
-              subtitle={
-                overdue.length === 0
-                  ? "You're all caught up"
-                  : "Needs attention"
-              }
+              subtitle={overdue.length ? "Needs attention" : "All caught up"}
               color={Colors.danger}
+              tint={Colors.dangerLight}
+              onPress={() => goTo("/tasks")}
             />
           </View>
 
           <View style={styles.section}>
-            <View
-              style={styles.sectionHeader}
-            >
-              <View>
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Next up
-                </Text>
-
-                <Text
-                  style={
-                    styles.sectionSubtitle
-                  }
-                >
-                  Your next scheduled
-                  activity
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.sectionIcon
-                }
-              >
-                <Ionicons
-                  name="time-outline"
-                  size={18}
-                  color={Colors.primary}
-                />
-              </View>
-            </View>
+            <SectionHeading
+              title="Next up"
+              subtitle="Your next scheduled activity"
+              action="View calendar"
+              onAction={() => goTo("/calendar")}
+            />
 
             {nextActivity ? (
-              <View
-                style={styles.nextCard}
-              >
-                <View
-                  style={styles.nextIcon}
-                >
+              <View style={styles.nextCard}>
+                <View style={styles.nextIcon}>
                   <Ionicons
                     name="arrow-forward"
                     size={23}
@@ -1160,324 +771,153 @@ export default function Dashboard() {
                   />
                 </View>
 
-                <View
-                  style={styles.nextMain}
-                >
-                  <Text
-                    numberOfLines={1}
-                    style={
-                      styles.nextTitle
-                    }
-                  >
-                    {getActivityTitle(
-                      nextActivity
-                    )}
+                <View style={styles.nextMain}>
+                  <Text style={styles.nextTitle} numberOfLines={2}>
+                    {getActivityTitle(nextActivity)}
                   </Text>
-
-                  <View
-                    style={
-                      styles.nextMetaRow
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.nextArea
-                      }
-                    >
-                      {getArea(
-                        nextActivity
-                      )}
+                  <View style={styles.nextMeta}>
+                    <Text style={styles.nextCategory}>
+                      {getArea(nextActivity)}
                     </Text>
-
-                    <View
-                      style={
-                        styles.nextDot
-                      }
-                    />
-
-                    <Text
-                      style={
-                        styles.nextCountdown
-                      }
-                    >
-                      {getCountdownText(
-                        nextActivity
-                      )}
+                    <View style={styles.metaDot} />
+                    <Text style={styles.nextCountdown}>
+                      {getCountdownText(nextActivity, now)}
                     </Text>
                   </View>
                 </View>
 
-                <View
-                  style={
-                    styles.nextTimeContainer
-                  }
-                >
-                  <Text
-                    style={styles.nextTime}
-                  >
-                    {formatTime(
-                      nextActivity.scheduled_time
-                    )}
+                <View style={styles.nextTimeWrap}>
+                  <Text style={styles.nextTime}>
+                    {formatTime(nextActivity.scheduled_time)}
                   </Text>
-
-                  <Text
-                    style={
-                      styles.nextTimeLabel
-                    }
-                  >
-                    {nextActivity.scheduled_date ===
-                    today
+                  <Text style={styles.nextDate}>
+                    {nextActivity.scheduled_date === today
                       ? "TODAY"
-                      : nextActivity.scheduled_date}
+                      : nextActivity.scheduled_date || "SCHEDULED"}
                   </Text>
                 </View>
               </View>
             ) : (
               <EmptyState
                 icon="checkmark-done-circle-outline"
-                title="You're all caught up"
-                description="There are no pending activities scheduled."
-                buttonText="Add task"
-                onPress={() =>
-                  navigateTo(
-                    "/add-activity"
-                  )
-                }
+                title="Nothing else on the horizon"
+                description="Add an activity when you're ready to plan your next step."
+                buttonText="Add a task"
+                onPress={() => goTo("/add-activity")}
               />
             )}
           </View>
 
           <View style={styles.section}>
-            <View
-              style={styles.sectionHeader}
-            >
-              <View>
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Today's activities
-                </Text>
+            <SectionHeading
+              title="Today's activities"
+              subtitle="Keep your attention on what matters"
+              action="See tasks"
+              onAction={() => goTo("/tasks")}
+            />
 
-                <Text
-                  style={
-                    styles.sectionSubtitle
-                  }
-                >
-                  Stay focused on what
-                  matters today
-                </Text>
-              </View>
-
-              <Pressable
-                onPress={() =>
-                  navigateTo(
-                    "/add-activity"
-                  )
-                }
-                style={({ pressed }) =>
-                  pressed &&
-                  styles.linkPressed
-                }
-              >
-                <Text
-                  style={styles.viewAll}
-                >
-                  + Add task
-                </Text>
-              </Pressable>
-            </View>
-
-            <View
-              style={styles.activitiesCard}
-            >
-              {todayActivities.length >
-              0 ? (
-                todayActivities.map(
-                  (activity, index) => (
-                    <View
-                      key={activity.id}
-                      style={
-                        index ===
-                        todayActivities.length -
-                          1
-                          ? undefined
-                          : styles.activityBorder
-                      }
-                    >
-                      <ActivityRow
-                        activity={activity}
-                        onToggle={() =>
-                          handleToggle(
-                            activity
-                          )
-                        }
-                      />
-                    </View>
-                  )
-                )
+            <View style={styles.activitiesCard}>
+              {todayActivities.length ? (
+                todayActivities.map((activity, index) => (
+                  <View
+                    key={activity.id}
+                    style={
+                      index < todayActivities.length - 1
+                        ? styles.activityDivider
+                        : undefined
+                    }
+                  >
+                    <ActivityRow
+                      activity={activity}
+                      onToggle={() => handleToggle(activity)}
+                    />
+                  </View>
+                ))
               ) : (
                 <EmptyState
                   icon="calendar-clear-outline"
-                  title="Nothing scheduled"
-                  description="Add your first task for today."
-                  buttonText="Add task"
-                  onPress={() =>
-                    navigateTo(
-                      "/add-activity"
-                    )
-                  }
+                  title="Give your day a plan"
+                  description="You don't have any activities scheduled for today yet."
+                  buttonText="Create your first task"
+                  onPress={() => goTo("/add-activity")}
                 />
               )}
             </View>
           </View>
 
           <View style={styles.section}>
-            <View
-              style={styles.sectionHeader}
-            >
-              <View>
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Life areas
-                </Text>
+            <SectionHeading
+              title="Life areas"
+              subtitle="A little progress in the areas that matter"
+            />
 
-                <Text
-                  style={
-                    styles.sectionSubtitle
-                  }
-                >
-                  See where your attention
-                  is going
-                </Text>
-              </View>
-            </View>
+            <View style={styles.lifeAreaGrid}>
+              {LIFE_AREAS.map((area) => {
+                const count = areaCounts[area.name] || 0;
 
-            <View
-              style={styles.lifeAreaGrid}
-            >
-              {LIFE_AREAS.map(
-                (area) => {
-                  const count =
-                    areaCounts[
-                      area.name
-                    ] || 0;
-
-                  return (
+                return (
+                  <View
+                    key={area.name}
+                    style={[styles.lifeAreaCard, isMobile && styles.mobileLifeAreaCard]}
+                  >
                     <View
-                      key={area.name}
                       style={[
-                        styles.lifeAreaCard,
-                        isMobile &&
-                          styles.mobileLifeAreaCard,
+                        styles.lifeAreaIcon,
+                        { backgroundColor: `${area.color}18` },
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.lifeAreaIcon,
-                          {
-                            backgroundColor: `${area.color}16`,
-                          },
-                        ]}
-                      >
-                        <Ionicons
-                          name={area.icon}
-                          size={20}
-                          color={
-                            area.color
-                          }
-                        />
-                      </View>
-
-                      <Text
-                        style={
-                          styles.lifeAreaName
-                        }
-                      >
-                        {area.name}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.lifeAreaCount
-                        }
-                      >
-                        {count}{" "}
-                        {count === 1
-                          ? "task"
-                          : "tasks"}
-                      </Text>
+                      <Ionicons
+                        name={area.icon}
+                        size={21}
+                        color={area.color}
+                      />
                     </View>
-                  );
-                }
-              )}
+                    <Text style={styles.lifeAreaName}>{area.name}</Text>
+                    <Text style={styles.lifeAreaCount}>
+                      {count} {count === 1 ? "task" : "tasks"} today
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
 
-          {overdue.length > 0 && (
-            <View
-              style={styles.overdueCard}
+          {overdue.length > 0 ? (
+            <Pressable
+              onPress={() => goTo("/tasks")}
+              style={styles.overdueBanner}
             >
-              <View
-                style={styles.overdueIcon}
-              >
+              <View style={styles.overdueIcon}>
                 <Ionicons
                   name="alert-outline"
                   size={22}
                   color={Colors.danger}
                 />
               </View>
-
-              <View
-                style={styles.overdueContent}
-              >
-                <Text
-                  style={
-                    styles.overdueTitle
-                  }
-                >
-                  You have{" "}
-                  {overdue.length} overdue{" "}
-                  {overdue.length === 1
-                    ? "task"
-                    : "tasks"}
+              <View style={styles.overdueCopy}>
+                <Text style={styles.overdueTitle}>
+                  {overdue.length} overdue {overdue.length === 1 ? "task" : "tasks"}
                 </Text>
-
-                <Text
-                  style={
-                    styles.overdueText
-                  }
-                >
-                  Review these tasks and
-                  reschedule or carry them
-                  forward.
+                <Text style={styles.overdueDescription}>
+                  Review your schedule and decide what to do next.
                 </Text>
               </View>
+              <Ionicons
+                name="chevron-forward"
+                size={19}
+                color={Colors.danger}
+              />
+            </Pressable>
+          ) : null}
 
-              <Pressable
-                onPress={() =>
-                  navigateTo("/trash")
-                }
-                style={
-                  styles.overdueArrow
-                }
-              >
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={Colors.danger}
-                />
-              </Pressable>
+          <View style={styles.footer}>
+            <View style={styles.footerMark}>
+              <Ionicons name="checkmark" size={13} color={Colors.white} />
             </View>
-          )}
-
-          <View
-            style={{ height: 40 }}
-          />
+            <Text style={styles.footerText}>
+              TaskFlow · Your work. Your goals. Your flow.
+            </Text>
+          </View>
         </ScrollView>
       </View>
     </View>
@@ -1485,874 +925,711 @@ export default function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    flexDirection: "row",
     backgroundColor: Colors.background,
   },
-
-  loadingContainer: {
+  main: {
+    flex: 1,
+    minWidth: 0,
+  },
+  loadingScreen: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.navyDeep,
   },
-
   loadingLogo: {
-    width: 66,
-    height: 66,
-    borderRadius: 20,
+    width: 68,
+    height: 68,
+    borderRadius: Radii.xl,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.primary,
+    ...Shadows.elevated,
   },
-
-  loadingLogoInner: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-  },
-
   loadingTitle: {
-    marginTop: 15,
+    marginTop: 16,
     fontSize: 25,
     fontWeight: "800",
     color: Colors.white,
+    letterSpacing: -0.5,
   },
-
-  loadingText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#9FB0C5",
+  loadingSpinner: {
+    marginTop: 22,
   },
-
-  sidebar: {
-    width: 248,
-    backgroundColor: Colors.navy,
-    paddingHorizontal: 14,
-    paddingTop: 26,
-    paddingBottom: 18,
-  },
-
-  brand: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    marginBottom: 38,
-  },
-
-  brandLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  brandName: {
-    marginLeft: 11,
-    fontSize: 21,
-    fontWeight: "800",
-    color: Colors.white,
-    letterSpacing: -0.3,
-  },
-
-  brandSubtitle: {
-    marginLeft: 11,
-    marginTop: 2,
-    fontSize: 7,
-    fontWeight: "800",
-    letterSpacing: 1.1,
-    color: "#8EA0B8",
-  },
-
-  menuLabel: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#71839B",
-    letterSpacing: 1.4,
-    marginHorizontal: 10,
-    marginBottom: 10,
-  },
-
-  sidebarItem: {
-    height: 47,
-    borderRadius: 11,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    marginBottom: 4,
-    position: "relative",
-  },
-
-  sidebarItemPressed: {
-    opacity: 0.72,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-
-  sidebarItemActive: {
-    backgroundColor: "rgba(255,122,0,0.12)",
-  },
-
-  sidebarItemText: {
-    marginLeft: 12,
-    fontSize: 14,
-    fontWeight: "600",
+  loadingCaption: {
+    marginTop: 10,
+    fontSize: 13,
     color: "#B7C4D6",
   },
-
-  sidebarItemTextActive: {
-    color: Colors.primary,
-    fontWeight: "800",
-  },
-
-  activeIndicator: {
-    position: "absolute",
-    right: 0,
-    width: 3,
-    height: 24,
-    borderRadius: 2,
-    backgroundColor: Colors.primary,
-  },
-
-  sidebarSpacer: {
-    flex: 1,
-  },
-
-  sidebarProfile: {
-    marginTop: 15,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.10)",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-  },
-
-  profileAvatar: {
-    width: 39,
-    height: 39,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,122,0,0.16)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  profileAvatarText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: Colors.primary,
-  },
-
-  profileInfo: {
-    flex: 1,
-  },
-
-  profileName: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: Colors.white,
-  },
-
-  profileEmail: {
-    fontSize: 9,
-    color: "#7F91A9",
-    marginTop: 3,
-  },
-
-  main: {
-    flex: 1,
-    minWidth: 0,
-  },
-
   topbar: {
     minHeight: 76,
-    paddingHorizontal: 22,
-    backgroundColor: Colors.white,
+    paddingHorizontal: 28,
+    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 18,
   },
-
+  mobileTopbar: {
+    minHeight: 76,
+    paddingLeft: 70,
+    paddingRight: 14,
+    gap: 10,
+  },
+  workspaceLabel: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+  },
   mobileBrand: {
     flexDirection: "row",
     alignItems: "center",
-    marginRight: 2,
+    gap: 7,
   },
-
-  mobileLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
+  brandMark: {
+    width: 33,
+    height: 33,
+    borderRadius: Radii.sm,
+    backgroundColor: Colors.navy,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  mobileBrandText: {
-    marginLeft: 8,
-    fontSize: 19,
+  brandName: {
+    color: Colors.textStrong,
+    fontSize: 17,
     fontWeight: "800",
-    color: Colors.navy,
+    letterSpacing: -0.4,
   },
-
   searchBox: {
     flex: 1,
-    maxWidth: 650,
-    height: 44,
-    borderRadius: 12,
+    maxWidth: 600,
+    minWidth: 0,
+    height: 43,
+    borderRadius: Radii.md,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: "#FAFBFC",
+    backgroundColor: Colors.backgroundSoft,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
+    gap: 9,
   },
-
   mobileSearchBox: {
-    minWidth: 0,
-  },
-
-  searchPlaceholder: {
-    marginLeft: 9,
-    color: Colors.textMuted,
-    fontSize: 13,
+    height: 40,
+    paddingHorizontal: 10,
     flex: 1,
   },
-
-  searchShortcut: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.white,
-    borderRadius: 6,
+  searchPlaceholder: {
+    flex: 1,
+    minWidth: 0,
+    color: Colors.textMuted,
+    fontSize: 12,
+  },
+  shortcut: {
     paddingHorizontal: 7,
     paddingVertical: 4,
+    borderRadius: Radii.xs,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
-
-  searchShortcutText: {
+  shortcutText: {
+    color: Colors.textSecondary,
     fontSize: 10,
-    color: Colors.textMuted,
     fontWeight: "600",
   },
-
   topbarActions: {
-    marginLeft: "auto",
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
   },
-
-  iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+  notificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: Radii.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.navy,
-    position: "relative",
   },
-
-  notificationDot: {
-    position: "absolute",
-    top: 8,
-    right: 9,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
-    borderWidth: 1.5,
-    borderColor: Colors.navy,
-  },
-
   aiButton: {
-    height: 42,
-    minWidth: 42,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    minHeight: 40,
+    paddingHorizontal: 13,
+    borderRadius: Radii.md,
     backgroundColor: Colors.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 7,
   },
-
   aiButtonText: {
     color: Colors.white,
-    fontWeight: "800",
     fontSize: 12,
+    fontWeight: "700",
   },
-
-  topAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Colors.navy,
+  avatar: {
+    width: 39,
+    height: 39,
+    borderRadius: Radii.round,
+    backgroundColor: Colors.lavenderLight,
+    borderWidth: 1,
+    borderColor: Colors.lavenderSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  topAvatarText: {
-    color: Colors.white,
+  avatarText: {
+    color: Colors.textOnLavender,
+    fontSize: 12,
     fontWeight: "800",
-    fontSize: 13,
   },
-
   content: {
-    paddingHorizontal: 32,
-    paddingTop: 30,
-    paddingBottom: 30,
-    maxWidth: 1250,
     width: "100%",
+    maxWidth: 1200,
     alignSelf: "center",
+    paddingHorizontal: 30,
+    paddingTop: 30,
+    paddingBottom: 32,
   },
-
   mobileContent: {
-    paddingHorizontal: 16,
-    paddingTop: 22,
+    paddingHorizontal: 17,
+    paddingTop: 23,
+    paddingBottom: 28,
   },
-
   greetingRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 24,
+    gap: 12,
   },
-
-  mobileGreetingRow: {
-    alignItems: "flex-start",
-  },
-
-  greetingContent: {
+  greetingText: {
     flex: 1,
+    minWidth: 0,
   },
-
   greeting: {
-    fontSize: 30,
+    color: Colors.textStrong,
+    fontSize: 29,
     fontWeight: "800",
-    color: Colors.navy,
-    letterSpacing: -0.7,
+    letterSpacing: -0.9,
   },
-
   mobileGreeting: {
-    fontSize: 25,
+    fontSize: 24,
     lineHeight: 31,
   },
-
   subtitle: {
-    marginTop: 6,
-    fontSize: 14,
     color: Colors.textSecondary,
+    fontSize: 13,
+    marginTop: 6,
+    lineHeight: 19,
   },
-
-  addButton: {
-    minHeight: 45,
-    paddingHorizontal: 16,
-    borderRadius: 11,
+  newTaskButton: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: Radii.md,
     backgroundColor: Colors.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    marginLeft: 12,
+    gap: 5,
+    ...Shadows.card,
   },
-
-  addButtonText: {
+  newTaskText: {
     color: Colors.white,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  pressed: {
+    opacity: 0.75,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    padding: 14,
+    marginBottom: 18,
+    backgroundColor: Colors.dangerLight,
+    borderWidth: 1,
+    borderColor: "#F5C8C5",
+    borderRadius: Radii.lg,
+  },
+  errorTextWrap: {
+    flex: 1,
+  },
+  errorTitle: {
+    color: Colors.textStrong,
     fontSize: 13,
     fontWeight: "800",
   },
-
-  buttonPressed: {
-    opacity: 0.78,
-    transform: [
-      {
-        scale: 0.98,
-      },
-    ],
-  },
-
-  progressCard: {
-    backgroundColor: Colors.navy,
-    borderRadius: 20,
-    padding: 23,
-    marginBottom: 16,
-    overflow: "hidden",
-  },
-
-  progressHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  progressTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: Colors.white,
-  },
-
-  progressDescription: {
-    marginTop: 5,
-    color: "#A8B8CC",
-    fontSize: 12,
-  },
-
-  progressPercentageBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,122,0,0.13)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,122,0,0.20)",
-  },
-
-  progressPercentage: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: Colors.primary,
-  },
-
-  progressTrack: {
-    height: 9,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    overflow: "hidden",
-    marginTop: 20,
-  },
-
-  progressFill: {
-    height: "100%",
-    borderRadius: 8,
-    backgroundColor: Colors.primary,
-  },
-
-  progressFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 13,
-  },
-
-  progressFooterText: {
-    fontSize: 12,
-    color: "#A8B8CC",
-  },
-
-  progressArrow: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-    backgroundColor: "rgba(255,122,0,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  statsGrid: {
-    flexDirection: "row",
-    gap: 14,
-    marginBottom: 27,
-  },
-
-  mobileStatsGrid: {
-    flexDirection: "column",
-  },
-
-  statCard: {
-    flex: 1,
-    minHeight: 115,
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 17,
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-
-  statIcon: {
-    width: 41,
-    height: 41,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  statContent: {
-    marginLeft: 11,
-    flex: 1,
-  },
-
-  statLabel: {
-    fontSize: 12,
+  errorMessage: {
     color: Colors.textSecondary,
-    fontWeight: "600",
-  },
-
-  statValue: {
-    fontSize: 26,
-    color: Colors.navy,
-    fontWeight: "800",
+    fontSize: 11,
+    lineHeight: 16,
     marginTop: 3,
   },
-
-  statSubtitle: {
-    fontSize: 10,
-    color: Colors.textMuted,
+  retryButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: Radii.sm,
+    backgroundColor: Colors.surface,
+  },
+  retryText: {
+    color: Colors.danger,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  progressCard: {
+    backgroundColor: Colors.navy,
+    borderRadius: Radii.xxl,
+    padding: 23,
+    marginBottom: 17,
+    overflow: "hidden",
+    ...Shadows.card,
+  },
+  progressTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  progressCopy: {
+    flex: 1,
+  },
+  eyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 12,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: Colors.lavender,
+  },
+  eyebrow: {
+    color: "#C6C2FF",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+  },
+  progressTitle: {
+    color: Colors.white,
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  progressSubtitle: {
+    color: "#B8C4D6",
+    fontSize: 12,
+    marginTop: 6,
+  },
+  progressCircle: {
+    width: 65,
+    height: 65,
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: "rgba(139,125,237,0.45)",
+    backgroundColor: "rgba(139,125,237,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  progressPercent: {
+    color: Colors.white,
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: Radii.round,
+    backgroundColor: "rgba(255,255,255,0.13)",
+    marginTop: 23,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: Radii.round,
+    backgroundColor: Colors.lavender,
+  },
+  progressBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 13,
+  },
+  progressMessage: {
+    flex: 1,
+    color: "#C5CFDE",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    gap: 13,
+    marginBottom: 29,
+  },
+  mobileStatsGrid: {
+    flexDirection: "column",
+    gap: 10,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 112,
+    padding: 15,
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    ...Shadows.card,
+  },
+  statIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: Radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  statLabel: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  statValue: {
+    color: Colors.textStrong,
+    fontSize: 25,
+    fontWeight: "800",
     marginTop: 2,
   },
-
-  section: {
-    marginBottom: 27,
+  statSubtitle: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    marginTop: 2,
   },
-
+  section: {
+    marginBottom: 29,
+  },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 13,
+    gap: 12,
+    marginBottom: 14,
   },
-
+  sectionHeadingText: {
+    flex: 1,
+  },
   sectionTitle: {
+    color: Colors.textStrong,
     fontSize: 18,
     fontWeight: "800",
-    color: Colors.navy,
+    letterSpacing: -0.3,
   },
-
   sectionSubtitle: {
-    marginTop: 4,
-    fontSize: 12,
     color: Colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 17,
   },
-
-  sectionIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 10,
-    backgroundColor: Colors.primaryLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  viewAll: {
+  sectionAction: {
     color: Colors.primary,
     fontSize: 12,
     fontWeight: "800",
   },
-
-  linkPressed: {
-    opacity: 0.6,
-  },
-
   nextCard: {
-    backgroundColor: Colors.navy,
     minHeight: 105,
-    borderRadius: 19,
-    padding: 18,
+    padding: 16,
+    borderRadius: Radii.xl,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+    ...Shadows.card,
   },
-
   nextIcon: {
-    width: 49,
-    height: 49,
-    borderRadius: 14,
-    backgroundColor: Colors.primary,
+    width: 46,
+    height: 46,
+    borderRadius: Radii.md,
+    backgroundColor: Colors.navy,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
   },
-
   nextMain: {
     flex: 1,
     minWidth: 0,
   },
-
   nextTitle: {
-    color: Colors.white,
-    fontSize: 16,
+    color: Colors.textStrong,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: "800",
   },
-
-  nextMetaRow: {
+  nextMeta: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 6,
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 7,
   },
-
-  nextArea: {
-    color: "#B6C3D5",
-    fontSize: 12,
+  nextCategory: {
+    color: Colors.textSecondary,
+    fontSize: 11,
   },
-
-  nextDot: {
+  metaDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#667891",
-    marginHorizontal: 7,
+    backgroundColor: Colors.lavender,
   },
-
   nextCountdown: {
-    color: "#FFB36D",
+    color: Colors.textOnLavender,
     fontSize: 11,
-    fontWeight: "800",
+    fontWeight: "700",
   },
-
-  nextTimeContainer: {
+  nextTimeWrap: {
     alignItems: "flex-end",
-    marginLeft: 10,
+    marginLeft: 2,
   },
-
   nextTime: {
-    color: Colors.white,
-    fontSize: 17,
+    color: Colors.textStrong,
+    fontSize: 13,
     fontWeight: "800",
   },
-
-  nextTimeLabel: {
-    color: "#7F91A9",
+  nextDate: {
+    color: Colors.textMuted,
     fontSize: 9,
     fontWeight: "700",
-    marginTop: 4,
+    marginTop: 5,
   },
-
-  emptyCard: {
-    minHeight: 150,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 18,
+  emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 26,
+    borderRadius: Radii.lg,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-
   emptyIcon: {
-    width: 49,
-    height: 49,
-    borderRadius: 15,
+    width: 50,
+    height: 50,
+    borderRadius: Radii.lg,
     backgroundColor: Colors.primaryLight,
     alignItems: "center",
     justifyContent: "center",
   },
-
   emptyTitle: {
-    marginTop: 9,
-    color: Colors.navy,
+    color: Colors.textStrong,
     fontSize: 15,
     fontWeight: "800",
-  },
-
-  emptyText: {
-    marginTop: 4,
-    color: Colors.textSecondary,
-    fontSize: 12,
+    marginTop: 12,
     textAlign: "center",
   },
-
+  emptyDescription: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: 5,
+    maxWidth: 300,
+  },
+  primaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: Radii.md,
+    backgroundColor: Colors.primary,
+  },
+  primaryButtonText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: "800",
+  },
   activitiesCard: {
-    backgroundColor: Colors.white,
+    borderRadius: Radii.xl,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 18,
     overflow: "hidden",
+    ...Shadows.card,
   },
-
-  activityBorder: {
+  activityDivider: {
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
   },
-
   activityRow: {
     minHeight: 76,
-    paddingHorizontal: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
-
   checkbox: {
-    width: 25,
-    height: 25,
+    width: 24,
+    height: 24,
     borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "#CBD3DF",
+    borderWidth: 1.7,
+    borderColor: Colors.borderStrong,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  checkboxPressed: {
-    opacity: 0.65,
+  checkboxChecked: {
+    backgroundColor: Colors.success,
+    borderColor: Colors.success,
   },
-
-  checkboxCompleted: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-
   activityMain: {
     flex: 1,
-    marginLeft: 12,
     minWidth: 0,
   },
-
   activityTitle: {
-    fontSize: 14,
+    color: Colors.textStrong,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: "700",
-    color: Colors.text,
   },
-
   activityTitleCompleted: {
-    textDecorationLine: "line-through",
     color: Colors.textMuted,
+    textDecorationLine: "line-through",
   },
-
   activityMeta: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 5,
+    gap: 7,
+    marginTop: 6,
   },
-
-  areaBadge: {
-    paddingHorizontal: 8,
+  categoryBadge: {
+    backgroundColor: Colors.background,
+    borderRadius: Radii.xs,
+    paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: "#F1F3F6",
   },
-
-  areaBadgeText: {
+  categoryText: {
+    color: Colors.textSecondary,
     fontSize: 9,
     fontWeight: "700",
-    color: Colors.textSecondary,
   },
-
   priorityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginLeft: 7,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
-
   activityTime: {
-    fontSize: 12,
-    color: Colors.text,
+    color: Colors.textSecondary,
+    fontSize: 11,
     fontWeight: "700",
-    marginRight: 7,
   },
-
   moreButton: {
-    width: 32,
+    width: 28,
     height: 32,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  smallAddButton: {
-    marginTop: 15,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 9,
-    backgroundColor: Colors.primary,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-
-  smallAddText: {
-    color: Colors.white,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
   lifeAreaGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: 11,
   },
-
   lifeAreaCard: {
-    flex: 1,
-    minWidth: 145,
-    backgroundColor: Colors.white,
+    flexGrow: 1,
+    flexBasis: "17%",
+    minWidth: 120,
+    padding: 14,
+    borderRadius: Radii.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: Colors.surface,
   },
-
   mobileLifeAreaCard: {
-    minWidth: "46%",
+    flexBasis: "44%",
+    minWidth: 0,
   },
-
   lifeAreaIcon: {
-    width: 39,
-    height: 39,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: Radii.md,
     alignItems: "center",
     justifyContent: "center",
   },
-
   lifeAreaName: {
-    marginTop: 12,
-    fontSize: 13,
+    color: Colors.textStrong,
+    fontSize: 12,
     fontWeight: "800",
-    color: Colors.navy,
+    marginTop: 11,
   },
-
   lifeAreaCount: {
-    marginTop: 3,
-    fontSize: 11,
     color: Colors.textSecondary,
+    fontSize: 10,
+    marginTop: 4,
   },
-
-  overdueCard: {
-    backgroundColor: "#FFF8F6",
-    borderWidth: 1,
-    borderColor: "#F5D9D2",
-    borderRadius: 16,
-    padding: 16,
+  overdueBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    padding: 15,
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+    borderColor: "#F4C9C6",
+    backgroundColor: Colors.dangerLight,
   },
-
   overdueIcon: {
     width: 42,
     height: 42,
-    borderRadius: 12,
-    backgroundColor: "#FDECEA",
+    borderRadius: Radii.md,
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  overdueContent: {
+  overdueCopy: {
     flex: 1,
   },
-
   overdueTitle: {
+    color: Colors.textStrong,
     fontSize: 13,
     fontWeight: "800",
-    color: Colors.text,
   },
-
-  overdueText: {
-    fontSize: 11,
+  overdueDescription: {
     color: Colors.textSecondary,
-    marginTop: 4,
+    fontSize: 11,
     lineHeight: 16,
+    marginTop: 4,
   },
-
-  overdueArrow: {
-    width: 32,
-    height: 32,
+  footer: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
+    paddingTop: 25,
+    paddingBottom: 5,
+  },
+  footerMark: {
+    width: 19,
+    height: 19,
+    borderRadius: 6,
+    backgroundColor: Colors.navy,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  footerText: {
+    color: Colors.textMuted,
+    fontSize: 10,
   },
 });

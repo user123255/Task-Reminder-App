@@ -1697,7 +1697,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
     paddingHorizontal: 17,
     fontSize: 16,
     color: '#172033',
@@ -1709,7 +1709,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
     paddingHorizontal: 17,
     paddingTop: 16,
     fontSize: 14,
@@ -1732,7 +1732,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
   },
 
   areaCardSelected: {
@@ -1770,7 +1770,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
   },
 
   scheduleRow: {
@@ -1852,7 +1852,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
   },
 
   selectIcon: {
@@ -1893,7 +1893,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1923,7 +1923,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
   },
 
   reminderIcon: {
@@ -1958,7 +1958,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
     marginTop: 8,
     paddingHorizontal: 15,
     flexDirection: 'row',
@@ -2278,7 +2278,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
   },
 
   timeChoiceSelected: {
@@ -2311,7 +2311,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2337,7 +2337,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
     padding: 12,
     marginTop: 12,
   },
@@ -2384,7 +2384,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#E4E7EC',
+    borderColor: '#E7ECF3',
   },
 
   modalOptionSelected: {

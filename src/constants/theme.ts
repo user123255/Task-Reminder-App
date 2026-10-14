@@ -1,110 +1,85 @@
+
 const BaseColors = {
   // ============================================================
-  // TASKFLOW BRAND
+  // TASKFLOW BRAND — MIDNIGHT NAVY, BLUE & LAVENDER
   // ============================================================
 
-  // Primary TaskFlow action color
-  primary: "#FF7A00",
-  primaryHover: "#E96800",
-  primaryPressed: "#D85F00",
-  primaryLight: "#FFF1E4",
-  primaryTrack: "#FF7A00",
+  primary: "#208AEF",
+  primaryHover: "#1976D2",
+  primaryPressed: "#176FC1",
+  primaryLight: "#EAF4FF",
+  primaryTrack: "#D5E9FF",
 
-  // TaskFlow dark foundation
-  navy: "#071A33",
-  navyDeep: "#041225",
-  navyLight: "#102B4A",
-  navySoft: "#173B5F",
+  navy: "#172033",
+  navyDeep: "#101828",
+  navyLight: "#263653",
+  navySoft: "#343F60",
 
-  // ============================================================
+  lavender: "#8B7DED",
+  lavenderLight: "#F0EDFF",
+  lavenderSoft: "#E5DEFF",
+
   // BACKGROUNDS
-  // ============================================================
-
-  background: "#F5F6F8",
-  backgroundSoft: "#F8F9FB",
-  backgroundSelected: "#FFF1E4",
+  background: "#F6F8FC",
+  backgroundSoft: "#FBFCFE",
+  backgroundSelected: "#EAF4FF",
   backgroundElement: "#FFFFFF",
-
   surface: "#FFFFFF",
-  surfaceMuted: "#F1F3F6",
+  surfaceMuted: "#F1F0FA",
+  surfaceBlue: "#F0F7FF",
+  surfaceLavender: "#F6F3FF",
 
-  // ============================================================
   // TEXT
-  // ============================================================
-
-  text: "#101828",
-  textStrong: "#071A33",
+  text: "#344054",
+  textStrong: "#172033",
   textSecondary: "#667085",
   textMuted: "#98A2B3",
-
   textOnDark: "#FFFFFF",
   textOnPrimary: "#FFFFFF",
+  textOnLavender: "#493D91",
 
-  // ============================================================
   // BORDERS
-  // ============================================================
-
-  border: "#E4E7EC",
-  borderLight: "#EAECF0",
+  border: "#E7ECF3",
+  borderLight: "#F0F2F6",
   borderStrong: "#D0D5DD",
+  borderFocused: "#208AEF",
 
-  // ============================================================
-  // SEMANTIC COLORS
-  // These are NOT brand colors.
-  // They are reserved for status/information.
-  // ============================================================
+  // STATUS COLORS
+  success: "#168653",
+  successLight: "#E8F7EF",
+  warning: "#DFAE45",
+  warningLight: "#FFF4DB",
+  danger: "#D92D20",
+  dangerLight: "#FEECEC",
+  info: "#208AEF",
+  infoLight: "#EAF4FF",
 
-  success: "#12B76A",
-  successLight: "#ECFDF3",
-
-  warning: "#F79009",
-  warningLight: "#FFFAEB",
-
-  danger: "#F04438",
-  dangerLight: "#FEF3F2",
-
-  info: "#2E90FA",
-  infoLight: "#EFF8FF",
-
-  // ============================================================
   // PRIORITIES
-  // ============================================================
+  priorityLow: "#208AEF",
+  priorityMedium: "#208AEF",
+  priorityHigh: "#D92D20",
 
-  priorityLow: "#12B76A",
-  priorityMedium: "#F79009",
-  priorityHigh: "#F04438",
-
-  // ============================================================
   // LIFE AREAS
-  // ============================================================
-
-  spiritual: "#7F56D9",
-  health: "#12B76A",
-  relationship: "#EC4899",
-  career: "#2E90FA",
+  spiritual: "#8B7DED",
+  health: "#20A464",
+  relationship: "#D66AA0",
+  career: "#208AEF",
   other: "#667085",
 
-  // ============================================================
   // UTILITY COLORS
-  // ============================================================
+  overlay: "rgba(17, 26, 48, 0.58)",
+  shadow: "rgba(24, 35, 63, 0.08)",
+  shadowStrong: "rgba(24, 35, 63, 0.14)",
 
-  overlay: "rgba(4, 18, 37, 0.55)",
-  shadow: "rgba(7, 26, 51, 0.10)",
-  shadowStrong: "rgba(7, 26, 51, 0.16)",
-
-  // These aliases are kept for compatibility with
-  // existing screens/components.
-  blue: "#2E90FA",
-  blueLight: "#EFF8FF",
-
-  green: "#12B76A",
-  greenLight: "#ECFDF3",
-
-  red: "#F04438",
-  redLight: "#FEF3F2",
-
-  orange: "#FF7A00",
-  orangeLight: "#FFF1E4",
+  // COMPATIBILITY ALIASES
+  blue: "#208AEF",
+  blueLight: "#EAF4FF",
+  green: "#20A464",
+  greenLight: "#E8F7EF",
+  red: "#D92D20",
+  redLight: "#FEECEC",
+  orange: "#208AEF",
+  orangeLight: "#EAF4FF",
 
   white: "#FFFFFF",
   black: "#000000",
@@ -118,12 +93,7 @@ export const Colors: ThemePalette & {
   dark: ThemePalette;
 } = {
   ...BaseColors,
-
   light: BaseColors,
-
-  // Keep the same visual language for now.
-  // Dark mode can be refined separately after
-  // the main application is visually consistent.
   dark: BaseColors,
 };
 
@@ -133,7 +103,6 @@ export const Colors: ThemePalette & {
 
 export const Spacing = {
   0: 0,
-
   1: 4,
   2: 8,
   3: 12,
@@ -236,46 +205,34 @@ export const lineHeight = LineHeights;
 export const Shadows = {
   none: {
     shadowColor: "transparent",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
   },
 
   card: {
-    shadowColor: Colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowColor: "rgba(24, 35, 63, 0.08)",
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 1,
-    shadowRadius: 14,
-    elevation: 3,
+    shadowRadius: 12,
+    elevation: 2,
   },
 
   elevated: {
-    shadowColor: Colors.shadowStrong,
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
+    shadowColor: "rgba(24, 35, 63, 0.14)",
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 1,
-    shadowRadius: 20,
-    elevation: 6,
+    shadowRadius: 18,
+    elevation: 5,
   },
 
   floating: {
-    shadowColor: Colors.shadowStrong,
-    shadowOffset: {
-      width: 0,
-      height: 12,
-    },
+    shadowColor: "rgba(24, 35, 63, 0.16)",
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 1,
-    shadowRadius: 28,
-    elevation: 10,
+    shadowRadius: 24,
+    elevation: 8,
   },
 } as const;
 
@@ -284,21 +241,9 @@ export const createShadows = (shadowColor?: string) => {
 
   return {
     none: Shadows.none,
-
-    card: {
-      ...Shadows.card,
-      shadowColor: color,
-    },
-
-    elevated: {
-      ...Shadows.elevated,
-      shadowColor: color,
-    },
-
-    floating: {
-      ...Shadows.floating,
-      shadowColor: color,
-    },
+    card: { ...Shadows.card, shadowColor: color },
+    elevated: { ...Shadows.elevated, shadowColor: color },
+    floating: { ...Shadows.floating, shadowColor: color },
   };
 };
 
@@ -347,3 +292,5 @@ export const Theme = {
 } as const;
 
 export default Theme;
+
+

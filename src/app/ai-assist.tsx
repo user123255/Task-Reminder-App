@@ -23,12 +23,12 @@ const COLORS = {
   navyDark: "#07162A",
   navySoft: "#163354",
 
-  orange: "#FF7A00",
-  orangeDark: "#E96500",
-  orangeSoft: "#FFF1E5",
+  orange: "#208AEF",
+  orangeDark: "#176FC1",
+  orangeSoft: "#EAF4FF",
 
-  gold: "#DFAE45",
-  goldSoft: "#FBF5E7",
+  gold: "#8B7DED",
+  goldSoft: "#F0EDFF",
 
   background: "#F4F5F7",
   white: "#FFFFFF",
@@ -2611,3 +2611,5 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
 });
+
+

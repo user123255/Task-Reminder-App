@@ -1,0 +1,294 @@
+
+const BaseColors = {
+  // ============================================================
+  // TASKFLOW BRAND — MIDNIGHT NAVY, BLUE & LAVENDER
+  // ============================================================
+
+  primary: "#208AEF",
+  primaryHover: "#1976D2",
+  primaryPressed: "#176FC1",
+  primaryLight: "#EAF4FF",
+  primaryTrack: "#D5E9FF",
+
+  navy: "#172033",
+  navyDeep: "#101828",
+  navyLight: "#263653",
+  navySoft: "#343F60",
+
+  lavender: "#8B7DED",
+  lavenderLight: "#F0EDFF",
+  lavenderSoft: "#E5DEFF",
+
+  // BACKGROUNDS
+  background: "#F6F8FC",
+  backgroundSoft: "#FBFCFE",
+  backgroundSelected: "#EAF4FF",
+  backgroundElement: "#FFFFFF",
+  surface: "#FFFFFF",
+  surfaceMuted: "#F1F0FA",
+  surfaceBlue: "#F0F7FF",
+  surfaceLavender: "#F6F3FF",
+
+  // TEXT
+  text: "#344054",
+  textStrong: "#172033",
+  textSecondary: "#667085",
+  textMuted: "#98A2B3",
+  textOnDark: "#FFFFFF",
+  textOnPrimary: "#FFFFFF",
+  textOnLavender: "#493D91",
+
+  // BORDERS
+  border: "#E7ECF3",
+  borderLight: "#F0F2F6",
+  borderStrong: "#D0D5DD",
+  borderFocused: "#208AEF",
+
+  // STATUS COLORS
+  success: "#168653",
+  successLight: "#E8F7EF",
+  warning: "#B96A08",
+  warningLight: "#FFF4DB",
+  danger: "#D92D20",
+  dangerLight: "#FEECEC",
+  info: "#208AEF",
+  infoLight: "#EAF4FF",
+
+  // PRIORITIES
+  priorityLow: "#208AEF",
+  priorityMedium: "#B96A08",
+  priorityHigh: "#D92D20",
+
+  // LIFE AREAS
+  spiritual: "#8B7DED",
+  health: "#20A464",
+  relationship: "#D66AA0",
+  career: "#208AEF",
+  other: "#667085",
+
+  // UTILITY COLORS
+  overlay: "rgba(17, 26, 48, 0.58)",
+  shadow: "rgba(24, 35, 63, 0.08)",
+  shadowStrong: "rgba(24, 35, 63, 0.14)",
+
+  // COMPATIBILITY ALIASES
+  blue: "#208AEF",
+  blueLight: "#EAF4FF",
+  green: "#20A464",
+  greenLight: "#E8F7EF",
+  red: "#D92D20",
+  redLight: "#FEECEC",
+  orange: "#B96A08",
+  orangeLight: "#FFF4DB",
+
+  white: "#FFFFFF",
+  black: "#000000",
+} as const;
+
+export type ThemePalette = typeof BaseColors;
+export type ThemeScheme = "light" | "dark";
+
+export const Colors: ThemePalette & {
+  light: ThemePalette;
+  dark: ThemePalette;
+} = {
+  ...BaseColors,
+  light: BaseColors,
+  dark: BaseColors,
+};
+
+// ============================================================
+// SPACING
+// ============================================================
+
+export const Spacing = {
+  0: 0,
+  1: 4,
+  2: 8,
+  3: 12,
+  4: 16,
+  5: 20,
+  6: 24,
+  7: 28,
+  8: 32,
+  9: 36,
+  10: 40,
+  12: 48,
+  14: 56,
+  16: 64,
+  20: 80,
+  24: 96,
+
+  half: 2,
+  one: 4,
+  two: 8,
+  three: 12,
+  four: 16,
+  five: 20,
+} as const;
+
+// ============================================================
+// BORDER RADII
+// ============================================================
+
+export const Radii = {
+  none: 0,
+  xs: 6,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  round: 999,
+} as const;
+
+// ============================================================
+// FONTS
+// ============================================================
+
+export const Fonts = {
+  regular: "System",
+  medium: "System",
+  semibold: "System",
+  bold: "System",
+  extraBold: "System",
+} as const;
+
+export const FontWeights = {
+  regular: "400" as const,
+  medium: "500" as const,
+  semibold: "600" as const,
+  bold: "700" as const,
+  extraBold: "800" as const,
+  heavy: "800" as const,
+} as const;
+
+export const fontWeight = FontWeights;
+
+// ============================================================
+// FONT SIZES
+// ============================================================
+
+export const FontSizes = {
+  xs: 11,
+  sm: 13,
+  md: 15,
+  lg: 17,
+  xl: 20,
+  xxl: 24,
+  xxxl: 30,
+  display: 36,
+  hero: 44,
+  base: 15,
+} as const;
+
+export const fontSize = FontSizes;
+
+// ============================================================
+// LINE HEIGHTS
+// ============================================================
+
+export const LineHeights = {
+  tight: 1.15,
+  snug: 1.25,
+  normal: 1.5,
+  relaxed: 1.65,
+  loose: 1.8,
+} as const;
+
+export const lineHeight = LineHeights;
+
+// ============================================================
+// SHADOWS
+// ============================================================
+
+export const Shadows = {
+  none: {
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+
+  card: {
+    shadowColor: "rgba(24, 35, 63, 0.08)",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+
+  elevated: {
+    shadowColor: "rgba(24, 35, 63, 0.14)",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+
+  floating: {
+    shadowColor: "rgba(24, 35, 63, 0.16)",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+} as const;
+
+export const createShadows = (shadowColor?: string) => {
+  const color = shadowColor ?? Colors.shadow;
+
+  return {
+    none: Shadows.none,
+    card: { ...Shadows.card, shadowColor: color },
+    elevated: { ...Shadows.elevated, shadowColor: color },
+    floating: { ...Shadows.floating, shadowColor: color },
+  };
+};
+
+// ============================================================
+// LAYOUT
+// ============================================================
+
+export const Layout = {
+  maxContentWidth: 1180,
+  maxFormWidth: 520,
+  maxModalWidth: 560,
+
+  desktopSidebarWidth: 248,
+  collapsedSidebarWidth: 76,
+
+  headerHeight: 72,
+  mobileHeaderHeight: 64,
+  bottomTabHeight: 72,
+
+  screenPadding: 24,
+  screenPaddingMobile: 16,
+  screenPaddingDesktop: 32,
+
+  cardPadding: 20,
+  cardPaddingLarge: 24,
+
+  mobileBreakpoint: 600,
+  tabletBreakpoint: 900,
+  desktopBreakpoint: 1100,
+} as const;
+
+// ============================================================
+// COMPLETE TASKFLOW THEME
+// ============================================================
+
+export const Theme = {
+  colors: Colors,
+  spacing: Spacing,
+  radii: Radii,
+  fonts: Fonts,
+  fontWeights: FontWeights,
+  fontSizes: FontSizes,
+  lineHeights: LineHeights,
+  shadows: Shadows,
+  layout: Layout,
+} as const;
+
+export default Theme;
